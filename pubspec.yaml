@@ -1,0 +1,41 @@
+name: flutter_webview_app
+description: A Flutter WebView template app for Rimix-based websites with push notifications and social login support.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # WebView
+  webview_flutter: ^4.4.2
+  webview_flutter_android: ^3.16.9
+  
+  # Firebase
+  firebase_core: ^2.24.2
+  firebase_messaging: ^14.7.9
+  
+  # Social Login
+  google_sign_in: ^6.1.6
+  kakao_flutter_sdk: ^1.3.0
+  
+  # Utilities
+  url_launcher: ^6.2.2
+  permission_handler: ^11.3.1
+  geolocator: ^11.0.0
+  package_info_plus: ^8.0.0
+  daum_postcode_search: ^1.0.0
+  http: ^1.1.0
+  path_provider: ^2.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
