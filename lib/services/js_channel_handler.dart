@@ -360,13 +360,29 @@ class JsChannelHandler {
 
   /// Confirm 결과를 JavaScript로 전송
   void sendConfirmResultToWebView(WebViewController controller, String confirmId, bool result) {
+    // 즉시 실행되도록 동기적으로 처리
+    // 결과를 먼저 설정하고 이벤트를 발생시켜 JavaScript가 즉시 감지할 수 있도록 함
     final script = '''
       (function() {
-        if (window.flutterConfirmResults) {
+        try {
+          if (!window.flutterConfirmResults) {
+            window.flutterConfirmResults = {};
+          }
+          // 결과를 즉시 설정 (폴링에서 먼저 확인됨)
           window.flutterConfirmResults['$confirmId'] = $result;
+          
+          // 이벤트 발생 (이벤트 리스너에서 감지)
+          if (window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('flutterConfirmResult', {
+              detail: { confirmId: '$confirmId', result: $result }
+            }));
+          }
+        } catch (e) {
+          console.error('[Flutter] Confirm 결과 전송 오류:', e);
         }
       })();
     ''';
+    // runJavaScript를 사용하여 즉시 실행
     controller.runJavaScript(script);
   }
 

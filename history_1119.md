@@ -272,3 +272,68 @@ lib/
 - Android에서 HTTP 로컬 서버 접근을 위해 `usesCleartextTraffic` 설정 필요
 - 소셜 로그인 호스트 목록은 필요시 추가 가능
 
+---
+
+## 2024-12-XX 작업 내역: Confirm 다이얼로그 프리징 문제 해결
+
+### 문제 상황
+- `fileuploader` JavaScript 라이브러리에서 `window.confirm()` 호출 시 약 5초간 프리징 발생
+- JavaScript에서 Flutter로 비동기 통신을 하면서 동기적으로 결과를 기다리는 구조로 인한 문제
+- 일반 웹 브라우저에서는 네이티브 다이얼로그가 동기적으로 작동하여 프리징이 없음
+
+### 해결 방법
+**JavaScript `window.confirm` 오버라이드 제거 및 Android 네이티브 `onJsConfirm` 사용**
+
+#### 변경 사항
+
+**1. JavaScript 오버라이드 제거**
+- `lib/screens/webview_screen.dart`의 `_injectJavaScriptBridge` 함수에서 `window.confirm` 오버라이드 제거
+- 기존 Flutter 채널을 통한 비동기 처리 방식 제거
+- 원래 `window.confirm()` 동작으로 복원하여 Android 네이티브 `onJsConfirm`이 자동으로 호출되도록 변경
+
+**2. Android 네이티브 다이얼로그 활용**
+- `MainActivity.kt`의 `onJsConfirm` 메서드가 이미 구현되어 있음
+- 네이티브 Android `AlertDialog`를 동기적으로 표시
+- `JsResult.confirm()` 또는 `JsResult.cancel()`로 즉시 결과 반환
+- 프리징 없이 일반 브라우저와 동일한 사용자 경험 제공
+
+**3. 추가 설정**
+- `_setupAndroidNativeDialogs()` 메서드 추가 (확인용, 실제 설정은 불필요)
+- `webview_flutter`가 네이티브 `WebChromeClient`를 자동으로 사용하므로 추가 설정 없이 작동
+
+### 동작 방식
+
+**이전 방식 (프리징 발생):**
+1. 웹 페이지에서 `window.confirm()` 호출
+2. JavaScript 오버라이드가 Flutter로 비동기 메시지 전송
+3. JavaScript에서 폴링 루프로 결과 대기 (5초 프리징)
+4. Flutter에서 다이얼로그 표시 및 결과 전송
+5. JavaScript에서 결과 수신 및 반환
+
+**현재 방식 (프리징 없음):**
+1. 웹 페이지에서 `window.confirm()` 호출
+2. Android 네이티브 `onJsConfirm` 자동 호출
+3. 네이티브 `AlertDialog` 동기적으로 표시
+4. 사용자 선택 시 즉시 `JsResult`로 결과 반환
+5. JavaScript 실행 즉시 재개 (프리징 없음)
+
+### 파일 변경 내역
+
+**lib/screens/webview_screen.dart**
+- `window.confirm` 오버라이드 코드 주석 처리 (902-911줄)
+- `_setupAndroidNativeDialogs()` 메서드 추가 (확인용)
+- `_setupAndroidPopupSupport()` 호출 시 `_setupAndroidNativeDialogs()` 추가 호출
+
+**android/app/src/main/kotlin/com/example/flutter_webview_app/MainActivity.kt**
+- 변경 없음 (기존 `onJsConfirm` 구현 그대로 사용)
+
+### 테스트 결과
+- ✅ `fileuploader` 라이브러리의 파일 삭제 확인 다이얼로그가 프리징 없이 즉시 표시
+- ✅ 사용자 선택 시 즉시 반응
+- ✅ 일반 웹 브라우저와 동일한 사용자 경험 제공
+
+### 참고 사항
+- `webview_flutter`는 네이티브 `WebChromeClient`를 자동으로 사용하므로 JavaScript 오버라이드를 제거하면 네이티브 다이얼로그가 자동으로 작동
+- `MainActivity.kt`의 `onJsConfirm`이 이미 구현되어 있어 추가 작업 불필요
+- 일반 브라우저처럼 네이티브 다이얼로그를 사용하는 것이 가장 간단하고 효율적인 해결 방법
+

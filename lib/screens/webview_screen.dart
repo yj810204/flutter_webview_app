@@ -102,6 +102,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         debugPrint('위치 권한이 영구적으로 거부되었습니다. 설정 화면으로 이동 안내 다이얼로그 표시');
         
         // 설정 화면으로 이동할지 물어보는 다이얼로그 표시
+        HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
         final shouldOpenSettings = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -109,11 +110,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
             content: const Text('위치 기반 서비스를 사용하려면 위치 권한이 필요합니다.\n설정 화면으로 이동하여 권한을 허용해주세요.'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
+                onPressed: () {
+                  HapticFeedback.lightImpact(); // 취소 버튼 클릭 시 햅틱
+                  Navigator.of(context).pop(false);
+                },
                 child: const Text('취소'),
               ),
               TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
+                onPressed: () {
+                  HapticFeedback.mediumImpact(); // 설정으로 이동 버튼 클릭 시 햅틱
+                  Navigator.of(context).pop(true);
+                },
                 child: const Text('설정으로 이동'),
               ),
             ],
@@ -181,6 +188,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       return false; // 시스템 기본 동작 방지
     } else {
       // 더 이상 뒤로갈 곳이 없으면 앱 종료 확인
+      HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
       final shouldExit = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -188,11 +196,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
           content: const Text('앱을 종료하시겠습니까?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () {
+                HapticFeedback.lightImpact(); // 아니오 버튼 클릭 시 햅틱
+                Navigator.of(context).pop(false);
+              },
               child: const Text('아니오'),
             ),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () {
+                HapticFeedback.mediumImpact(); // 예 버튼 클릭 시 햅틱
+                Navigator.of(context).pop(true);
+              },
               child: const Text('예'),
             ),
           ],
@@ -346,6 +360,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final androidController = controller.platform as AndroidWebViewController;
         await _setupAndroidPopupSupport(androidController);
         await _setupAndroidFileChooser(androidController);
+        await _setupAndroidNativeDialogs(androidController);
       }
       
       await controller.loadRequest(Uri.parse(AppConfig.websiteUrl));
@@ -408,6 +423,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('Android WebView 팝업 지원 활성화 오류: $e');
       // 오류가 발생해도 계속 진행 (webview_flutter는 기본적으로 팝업을 지원하지 않을 수 있음)
     }
+  }
+
+  /// Android 네이티브 JavaScript 다이얼로그 설정
+  /// JavaScript window.confirm 오버라이드를 제거했으므로 Android의 네이티브 onJsConfirm이 자동으로 호출됩니다.
+  /// MainActivity.kt의 onJsConfirm이 이미 구현되어 있으므로 추가 설정이 필요 없습니다.
+  /// webview_flutter는 네이티브 WebChromeClient를 자동으로 사용합니다.
+  Future<void> _setupAndroidNativeDialogs(AndroidWebViewController androidController) async {
+    debugPrint('Android 네이티브 JavaScript 다이얼로그 확인');
+    debugPrint('JavaScript window.confirm 오버라이드가 제거되었으므로 네이티브 onJsConfirm이 자동으로 호출됩니다.');
+    // webview_flutter는 네이티브 WebChromeClient를 자동으로 사용하므로
+    // MainActivity.kt의 onJsConfirm이 자동으로 호출됩니다.
   }
 
   /// Android WebView 파일 선택기 설정
@@ -522,30 +548,60 @@ class _WebViewScreenState extends State<WebViewScreen> {
             // 동기적으로 결과를 반환해야 하므로 Promise를 사용할 수 없음
             // 대신 고유 ID를 생성하고 결과를 기다림
             const confirmId = 'confirm_' + Date.now() + '_' + Math.random();
+            
+            // 초기화 확인
+            if (!window.flutterConfirmResults) {
+              window.flutterConfirmResults = {};
+            }
+            
+            // Flutter로 메시지 전송
             window.flutterChannel.postMessage({
               action: 'showConfirm',
               message: message,
               confirmId: confirmId
             });
             
-            // 결과를 기다리는 동안 블로킹 (간단한 폴링 방식)
+            // 결과를 기다리는 동안 블로킹 (최적화된 폴링 방식)
             let result = null;
             const startTime = Date.now();
-            const timeout = 30000; // 30초 타임아웃
+            const timeout = 3000; // 3초 타임아웃
+            let checkCount = 0;
             
+            // 이벤트 리스너로 결과를 즉시 감지
+            const resultHandler = function(event) {
+              if (event.detail && event.detail.confirmId === confirmId) {
+                result = event.detail.result;
+                window.removeEventListener('flutterConfirmResult', resultHandler);
+              }
+            };
+            window.addEventListener('flutterConfirmResult', resultHandler);
+            
+            // 결과를 기다리는 동안 블로킹 (최적화된 폴링 방식)
             while (result === null && (Date.now() - startTime) < timeout) {
+              // 결과 확인 (매번 체크)
               if (window.flutterConfirmResults && window.flutterConfirmResults[confirmId] !== undefined) {
                 result = window.flutterConfirmResults[confirmId];
                 delete window.flutterConfirmResults[confirmId];
+                window.removeEventListener('flutterConfirmResult', resultHandler);
                 break;
               }
-              // 짧은 대기 (동기 블로킹)
-              const endTime = Date.now() + 10;
-              while (Date.now() < endTime) {
-                // 빈 루프로 대기
+              
+              checkCount++;
+              // 매우 짧은 대기로 메인 스레드에 최소한의 기회만 제공
+              // 대부분의 시간은 결과 확인에 사용
+              if (checkCount % 100 === 0) {
+                // 100번 체크마다 1ms 대기 (거의 즉시 체크)
+                const endTime = Date.now() + 1;
+                while (Date.now() < endTime) {
+                  // 빈 루프로 대기
+                }
               }
             }
             
+            // 이벤트 리스너 정리
+            window.removeEventListener('flutterConfirmResult', resultHandler);
+            
+            // 결과가 없으면 기본값 false 반환
             return result !== null ? result : false;
           },
           
@@ -855,16 +911,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           };
           
-          // confirm 오버라이드
-          const originalConfirm = window.confirm;
-          window.confirm = function(message) {
-            console.log('[Flutter] confirm 호출:', message);
-            if (window.flutterChannel && window.flutterChannel.showConfirm) {
-              return window.flutterChannel.showConfirm(message);
-            } else {
-              return originalConfirm.call(window, message);
-            }
-          };
+          // confirm 오버라이드 제거 - Android 네이티브 onJsConfirm 사용
+          // const originalConfirm = window.confirm;
+          // window.confirm = function(message) {
+          //   console.log('[Flutter] confirm 호출:', message);
+          //   if (window.flutterChannel && window.flutterChannel.showConfirm) {
+          //     return window.flutterChannel.showConfirm(message);
+          //   } else {
+          //     return originalConfirm.call(window, message);
+          //   }
+          // };
+          // 네이티브 confirm이 자동으로 호출되도록 원래 동작 유지
           
           // prompt 오버라이드
           const originalPrompt = window.prompt;
@@ -1320,7 +1377,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       return;
     }
 
-    // 저장 확인 다이얼로그 표시
+    // 저장 확인 다이얼로그 표시 (햅틱 피드백 포함)
+    HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
     final shouldSave = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -1330,12 +1388,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact(); // 취소 버튼 클릭 시 햅틱
                 Navigator.of(context).pop(false);
               },
               child: const Text('취소'),
             ),
             TextButton(
               onPressed: () {
+                HapticFeedback.mediumImpact(); // 저장 버튼 클릭 시 햅틱
                 Navigator.of(context).pop(true);
               },
               child: const Text('저장'),
@@ -1472,6 +1532,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   /// Alert 다이얼로그 표시 (제목 없이)
   void _showAlertDialog(String message) {
+    HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1481,6 +1542,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                HapticFeedback.mediumImpact(); // 확인 버튼 클릭 시 햅틱
                 Navigator.of(context).pop();
               },
               child: const Text('확인'),
@@ -1493,6 +1555,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   /// Confirm 다이얼로그 표시 (제목 없이)
   void _showConfirmDialog(String message, String confirmId) {
+    HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
+    
+    // 다이얼로그를 즉시 표시 (비동기 처리 제거하여 지연 최소화)
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1502,21 +1569,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                // JavaScript로 false 전송
+                HapticFeedback.lightImpact(); // 취소 버튼 클릭 시 햅틱
+                // JavaScript로 false 전송 (다이얼로그 닫기 전에 먼저 전송)
                 if (_controller != null) {
                   _jsHandler.sendConfirmResultToWebView(_controller!, confirmId, false);
                 }
+                Navigator.of(context).pop();
               },
               child: const Text('취소'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                // JavaScript로 true 전송
+                HapticFeedback.mediumImpact(); // 확인 버튼 클릭 시 햅틱
+                // JavaScript로 true 전송 (다이얼로그 닫기 전에 먼저 전송)
                 if (_controller != null) {
                   _jsHandler.sendConfirmResultToWebView(_controller!, confirmId, true);
                 }
+                Navigator.of(context).pop();
               },
               child: const Text('확인'),
             ),
@@ -1530,6 +1599,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void _showPromptDialog(String message, String defaultText, String promptId) {
     final TextEditingController textController = TextEditingController(text: defaultText);
     
+    HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1552,6 +1622,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact(); // 취소 버튼 클릭 시 햅틱
                 Navigator.of(context).pop();
                 // JavaScript로 null 전송 (취소)
                 if (_controller != null) {
@@ -1563,6 +1634,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             ),
             TextButton(
               onPressed: () {
+                HapticFeedback.mediumImpact(); // 확인 버튼 클릭 시 햅틱
                 Navigator.of(context).pop();
                 // JavaScript로 입력값 전송
                 if (_controller != null) {
