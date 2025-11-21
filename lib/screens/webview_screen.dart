@@ -37,22 +37,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
   DaumPostcodeLocalServer? _postcodeServer;
 
   // 소셜 로그인 호스트 목록 (웹뷰 내에서 처리해야 함)
-  static const List<String> _socialLoginHosts = [
-    // 카카오
-    'kauth.kakao.com',
-    'kapi.kakao.com',
-    'accounts.kakao.com',
-    // 구글
-    'accounts.google.com',
-    'oauth2.googleapis.com',
-    'www.googleapis.com',
-    // 애플
-    'appleid.apple.com',
-    'idmsa.apple.com',
-    // 네이버
-    'nid.naver.com',
-    'openapi.naver.com',
-  ];
+  // AppConfig.allowedSocialLoginDomains 사용
+  static List<String> get _socialLoginHosts => AppConfig.allowedSocialLoginDomains;
 
   @override
   void initState() {
@@ -148,7 +134,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         debugPrint('✅ 위치 권한이 허용되었습니다!');
         
         // MainActivity에 geolocation 권한 허용 알림
-        const platform = MethodChannel('com.example.flutter_webview_app/geolocation');
+        const platform = MethodChannel(AppConfig.methodChannelGeolocation);
         try {
           await platform.invokeMethod('setGeolocationEnabled', {'enabled': true});
           debugPrint('MainActivity에 geolocation 권한 허용 알림 전송 완료');
@@ -394,7 +380,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   /// 플랫폼 채널을 통해 MainActivity의 WebChromeClient를 설정합니다.
   void _setupGeolocationPermissions() {
     // 플랫폼 채널을 통해 MainActivity에 geolocation 권한 처리를 요청
-    const platform = MethodChannel('com.example.flutter_webview_app/geolocation');
+    const platform = MethodChannel(AppConfig.methodChannelGeolocation);
     
     // 위치 권한이 허용되어 있으면 MainActivity에 알림
     Permission.location.status.then((status) {
@@ -416,7 +402,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('Android WebView 팝업 지원 설정 시도');
       
       // 플랫폼 채널을 통해 MainActivity에 팝업 지원 활성화 요청
-      const platform = MethodChannel('com.example.flutter_webview_app/webview');
+      const platform = MethodChannel(AppConfig.methodChannelWebview);
       await platform.invokeMethod('enablePopupSupport');
       debugPrint('Android WebView 팝업 지원 활성화 요청 완료');
     } catch (e) {
@@ -450,7 +436,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         debugPrint('캡처 활성화: ${fileSelectorParams.isCaptureEnabled}');
         
         // 플랫폼 채널을 통해 MainActivity의 파일 선택기 호출
-        const platform = MethodChannel('com.example.flutter_webview_app/webview');
+        const platform = MethodChannel(AppConfig.methodChannelWebview);
         try {
           final result = await platform.invokeMethod('showFileChooser', {
             'acceptTypes': fileSelectorParams.acceptTypes,
@@ -486,6 +472,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
     
     debugPrint('_injectJavaScriptBridge: JavaScript 브리지 주입 시작');
     
+    // 먼저 Flutter 설정값을 JavaScript에 주입
+    final configScript = '''
+      window.flutterConfig = {
+        jsConfirmTimeoutMs: ${AppConfig.jsConfirmTimeoutMs},
+        jsLocationTimeoutMs: ${AppConfig.jsLocationTimeoutMs},
+        locationUpdateIntervalMs: ${AppConfig.locationUpdateIntervalMs},
+        pullToRefreshDistanceThreshold: ${AppConfig.pullToRefreshDistanceThreshold},
+        pullToRefreshTimeThreshold: ${AppConfig.pullToRefreshTimeThreshold}
+      };
+    ''';
+    
+    try {
+      _controller?.runJavaScript(configScript);
+    } catch (e) {
+      debugPrint('Flutter 설정값 주입 오류: $e');
+    }
+    
     final script = '''
       (function() {
         // Flutter 채널과 통신하는 헬퍼 함수
@@ -504,12 +507,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
             });
           },
           
-          // 소셜 로그인 요청
+          // 소셜 로그인 요청 - 웹에서 처리됨
           socialLogin: function(provider) {
-            window.flutterChannel.postMessage({
-              action: 'socialLogin',
-              provider: provider
-            });
+            console.log('소셜 로그인은 웹에서 처리됩니다. provider:', provider);
+            // 웹에서 소셜 로그인 처리
           },
           
           // URL 열기
@@ -564,7 +565,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             // 결과를 기다리는 동안 블로킹 (최적화된 폴링 방식)
             let result = null;
             const startTime = Date.now();
-            const timeout = 3000; // 3초 타임아웃
+            const timeout = (window.flutterConfig && window.flutterConfig.jsConfirmTimeoutMs) || 3000;
             let checkCount = 0;
             
             // 이벤트 리스너로 결과를 즉시 감지
@@ -618,7 +619,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             // 결과를 기다리는 동안 블로킹
             let result = null;
             const startTime = Date.now();
-            const timeout = 30000;
+            const timeout = (window.flutterConfig && window.flutterConfig.jsLocationTimeoutMs) || 30000;
             
             while (result === null && (Date.now() - startTime) < timeout) {
               if (window.flutterPromptResults && window.flutterPromptResults[promptId] !== undefined) {
@@ -767,7 +768,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
             let lastPosition = null;
             
             // 주기적으로 위치 정보 요청 (옵션에 따라)
-            const updateInterval = (options && options.interval) ? options.interval : 10000; // 기본 10초
+            const defaultInterval = (window.flutterConfig && window.flutterConfig.locationUpdateIntervalMs) || 10000;
+            const updateInterval = (options && options.interval) ? options.interval : defaultInterval;
             
             const requestLocation = function() {
               const requestId = watchId + '_' + Date.now();
@@ -1050,8 +1052,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
         let pullToRefreshDistance = 0;
         let pullToRefreshStartTime = 0;
         let isRefreshing = false;
-        const PULL_TO_REFRESH_DISTANCE_THRESHOLD = 300; // 300px 이상 당겨야 함
-        const PULL_TO_REFRESH_TIME_THRESHOLD = 3000; // 3초 이상 유지해야 함
+        const PULL_TO_REFRESH_DISTANCE_THRESHOLD = (window.flutterConfig && window.flutterConfig.pullToRefreshDistanceThreshold) || 300;
+        const PULL_TO_REFRESH_TIME_THRESHOLD = (window.flutterConfig && window.flutterConfig.pullToRefreshTimeThreshold) || 3000;
         
         // 새로고침 인디케이터 UI 생성 (간단한 텍스트 표시)
         function createPullToRefreshIndicator() {
@@ -1468,7 +1470,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         final Uint8List imageBytes = response.bodyBytes;
         
         // 플랫폼 채널을 통해 갤러리에 저장
-        const platform = MethodChannel('com.example.flutter_webview_app/image');
+        const platform = MethodChannel(AppConfig.methodChannelImage);
         
         try {
           // Uint8List를 List<int>로 변환하여 전달

@@ -3,14 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../config/app_config.dart';
 import 'push_notification_service.dart';
-import 'social_login_service.dart';
 import 'location_service.dart';
 
 /// JavaScript 채널 핸들러
 /// 웹뷰와 네이티브 앱 간의 통신을 처리합니다.
 class JsChannelHandler {
   PushNotificationService? _pushService;
-  final SocialLoginService _socialLoginService = SocialLoginService();
   final LocationService _locationService = LocationService();
   final Function(String)? onUrlChange;
   final Future<bool> Function()? onRequestLocationPermission;
@@ -60,7 +58,8 @@ class JsChannelHandler {
           _handleGetFCMToken();
           break;
         case 'socialLogin':
-          _handleSocialLogin(data);
+          // 소셜 로그인은 웹에서 처리됩니다.
+          debugPrint('소셜 로그인은 웹에서 처리됩니다. provider: ${data['provider']}');
           break;
         case 'openUrl':
           _handleOpenUrl(data);
@@ -125,32 +124,6 @@ class JsChannelHandler {
     }
   }
 
-  /// 소셜 로그인 처리
-  Future<void> _handleSocialLogin(Map<String, dynamic> data) async {
-    final String provider = data['provider'] ?? '';
-    
-    Map<String, dynamic>? result;
-    
-    if (provider == 'google') {
-      result = await _socialLoginService.signInWithGoogle();
-    } else if (provider == 'kakao') {
-      result = await _socialLoginService.signInWithKakao();
-    } else {
-      if (_controller != null) {
-        final errorResult = jsonEncode({
-          'success': false,
-          'error': '지원하지 않는 로그인 제공자: $provider',
-        });
-        sendSocialLoginResultToWebView(_controller!, errorResult);
-      }
-      return;
-    }
-
-    if (_controller != null) {
-      final jsonResult = _socialLoginService.loginResultToJson(result);
-      sendSocialLoginResultToWebView(_controller!, jsonResult);
-    }
-  }
 
   /// URL 열기
   void _handleOpenUrl(Map<String, dynamic> data) {
@@ -224,15 +197,10 @@ class JsChannelHandler {
     controller.runJavaScript(script);
   }
 
-  /// 소셜 로그인 결과를 웹뷰로 전송하는 헬퍼 메서드
-  void sendSocialLoginResultToWebView(WebViewController controller, String result) {
-    final script = '''
-      if (window.onSocialLoginResult) {
-        window.onSocialLoginResult($result);
-      }
-    ''';
-    controller.runJavaScript(script);
-  }
+  /// 소셜 로그인 결과를 웹뷰로 전송하는 헬퍼 메서드 - 웹에서 처리됨
+  // void sendSocialLoginResultToWebView(WebViewController controller, String result) {
+  //   // 소셜 로그인은 웹에서 처리됩니다.
+  // }
 
   /// 위치 정보를 웹뷰로 전송하는 헬퍼 메서드
   void sendLocationToWebView(WebViewController controller, Map<String, dynamic> position, String? requestId) {

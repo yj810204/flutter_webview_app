@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart' as kakao;
 import 'config/app_config.dart';
 import 'screens/webview_screen.dart';
 import 'services/push_notification_service.dart';
@@ -48,21 +47,8 @@ void main() async {
     }
   }
 
-  // 카카오 SDK 초기화 (키가 설정되지 않아도 앱이 실행되도록 안전하게 처리)
-  if (AppConfig.enableKakaoLogin && 
-      AppConfig.kakaoNativeAppKey != 'YOUR_KAKAO_NATIVE_APP_KEY') {
-    try {
-      kakao.KakaoSdk.init(
-        nativeAppKey: AppConfig.kakaoNativeAppKey,
-      );
-      debugPrint('카카오 SDK 초기화 완료');
-    } catch (e) {
-      debugPrint('카카오 SDK 초기화 오류: $e');
-      debugPrint('카카오 로그인은 사용할 수 없지만 앱은 계속 실행됩니다.');
-    }
-  } else {
-    debugPrint('카카오 SDK 초기화 건너뜀 (앱 키가 설정되지 않음)');
-  }
+  // 소셜 로그인은 웹에서 처리됨
+  debugPrint('소셜 로그인은 웹에서 처리됩니다.');
 
   // 앱 실행 (초기화 오류와 관계없이 항상 실행)
   runApp(const MyApp());

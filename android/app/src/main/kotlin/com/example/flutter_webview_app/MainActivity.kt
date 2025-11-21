@@ -46,9 +46,9 @@ class MainActivity: FlutterActivity() {
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
     private val CAMERA_PERMISSION_REQUEST_CODE = 1002
     private val FILE_CHOOSER_REQUEST_CODE = 1003
-    private val GEOLOCATION_CHANNEL = "com.example.flutter_webview_app/geolocation"
-    private val WEBVIEW_CHANNEL = "com.example.flutter_webview_app/webview"
-    private val IMAGE_CHANNEL = "com.example.flutter_webview_app/image"
+    private val GEOLOCATION_CHANNEL = AppConfig.METHOD_CHANNEL_GEOLOCATION
+    private val WEBVIEW_CHANNEL = AppConfig.METHOD_CHANNEL_WEBVIEW
+    private val IMAGE_CHANNEL = AppConfig.METHOD_CHANNEL_IMAGE
     private var geolocationEnabled = false
     private var popupSupportEnabled = false
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null

@@ -1,0 +1,73 @@
+<script>
+    var temp_target_url = decodeURI(document.location.href).split("?target_url=")[1];
+    var target_url = temp_target_url.split("&device_token=")[0];
+
+
+    if(window.navigator.onLine) {
+        loadConfig();
+        postToken();
+    } else {
+        window.Android.noConn();
+    }
+
+    function loadConfig() {
+        const xhttp = new XMLHttpRequest();
+
+        xhttp.onload = function() {
+            var xmlDoc = this.responseXML;
+            var xmlNode = xmlDoc.getElementsByTagName("appconf")[0];
+            var delay_time = xmlNode.getElementsByTagName("delay_time")[0].childNodes[0].nodeValue;
+            var bg_image = xmlNode.getElementsByTagName("bg_image")[0].childNodes[0].nodeValue;
+            var bg_name = xmlNode.getElementsByTagName("bg_name")[0].childNodes[0].nodeValue;
+            var app_use = xmlNode.getElementsByTagName("app_use")[0].childNodes[0].nodeValue;
+            var app_version = xmlNode.getElementsByTagName("app_version")[0].childNodes[0].nodeValue;
+            var update_title = xmlNode.getElementsByTagName("update_title")[0].childNodes[0].nodeValue;
+            var update_desc = xmlNode.getElementsByTagName("update_desc")[0].childNodes[0].nodeValue;
+            var app_update = xmlNode.getElementsByTagName("app_update")[0].childNodes[0].nodeValue;
+            var noti_use = xmlNode.getElementsByTagName("noti_use")[0].childNodes[0].nodeValue;
+            var noti_title = xmlNode.getElementsByTagName("noti_title")[0].childNodes[0].nodeValue;
+            var noti_desc = xmlNode.getElementsByTagName("noti_desc")[0].childNodes[0].nodeValue;
+            var app_btn = xmlNode.getElementsByTagName("app_btn")[0].childNodes[0].nodeValue;
+
+            if(bg_image != -99) {
+                window.Android.uTrigger("set_bg_image", "https://" + target_url + "/" + bg_image, bg_name);
+            }
+
+            if(app_use == -1) {
+                location.href = "app://callNotUse";
+            } else {
+                if(app_version != -99 && app_update != -99 && update_title != -99 && update_desc != -99) {
+                    if(app_update == 1) {
+                        location.href = "app://callAppVersion?version=" + app_version + "&update_type=required&delay=" + delay_time + "&update_title=" + update_title + "&update_desc=" + update_desc;
+                    } else {
+                        if(noti_use == 1 && noti_title != -99 && noti_desc != -99 && app_btn != -99) {
+                            location.href = "app://callAppVersion?version=" + app_version + "&update_type=recommend&delay=" + delay_time + "&update_title=" + update_title + "&update_desc=" + update_desc + "&noti_use=1&title=" + noti_title + "&desc=" + noti_desc + "&btn=" + app_btn;
+                        } else {
+                            location.href = "app://callAppVersion?version=" + app_version + "&update_type=recommend&delay=" + delay_time + "&update_title=" + update_title + "&update_desc=" + update_desc;
+                        }
+                    }
+                } else {
+                    if(noti_use == 1 && noti_title != -99 && noti_desc != -99 && app_btn != -99) {
+                        location.href = "app://callAppDialog?title=" + noti_title + "&desc=" + noti_desc + "&btn=" + app_btn + "&delay=" + delay_time;
+                    } else {
+                        location.href = "app://callMainActivity?delay=" + delay_time;
+                    }
+                }
+            }
+        }
+        xhttp.open("GET", "https://" + target_url + "/modules/appmgmt/libs/appInfo.php", true);
+        xhttp.send();
+    }
+
+    function postToken() {
+        var params = "device_token=" + temp_target_url.split("&device_token=")[1];
+
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function() {
+            var result = this.responseXML.getElementsByTagName("device_token")[0].getElementsByTagName("result")[0].childNodes[0].nodeValue;
+            console.log(result);
+        }
+        xhttp.open("POST", "https://" + target_url + "/modules/appmgmt/libs/deviceToken.php", true);
+        xhttp.send(params);
+    }
+</script>

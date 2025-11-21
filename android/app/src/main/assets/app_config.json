@@ -1,0 +1,34 @@
+{
+  "websiteUrl": "https://howtattoo.co.kr/",
+  "serverApiPathAppInfo": "modules/appmgmt/libs/appInfo.php",
+  "serverApiPathAppInfoIOS": "modules/appmgmt/libs/appInfo_ios.php",
+  "serverApiPathDeviceToken": "modules/appmgmt/libs/deviceToken.php",
+  "androidPackageName": "com.example.flutter_webview_app",
+  "iosBundleId": "com.example.flutterWebviewApp",
+  "appVersion": "1.4.1",
+  "defaultSplashDelayMs": 3000,
+  "pushNotificationSplashDelayMs": 500,
+  "httpConnectTimeoutMs": 10000,
+  "httpReadTimeoutMs": 10000,
+  "methodChannelGeolocation": "com.example.flutter_webview_app/geolocation",
+  "methodChannelWebview": "com.example.flutter_webview_app/webview",
+  "methodChannelImage": "com.example.flutter_webview_app/image",
+  "jsChannelName": "FlutterChannel",
+  "jsConfirmTimeoutMs": 3000,
+  "jsLocationTimeoutMs": 30000,
+  "locationUpdateIntervalMs": 10000,
+  "pullToRefreshDistanceThreshold": 300,
+  "pullToRefreshTimeThreshold": 3000,
+  "useFirebase": false,
+  "allowedSocialLoginDomains": ["logins.daum.net", "// 카카오 SSO 토큰 로그인
+    kauth.kakao.com", "// 카카오 OAuth 인증
+    kapi.kakao.com", "// 카카오 API
+    accounts.kakao.com", "// 카카오 계정
+    accounts.google.com", "// 구글 계정
+    oauth2.googleapis.com", "// 구글 OAuth2
+    www.googleapis.com", "// 구글 API
+    appleid.apple.com", "// 애플 ID
+    idmsa.apple.com", "// 애플 ID 관리
+    nid.naver.com", "// 네이버 로그인
+    openapi.naver.com", "// 네이버 API"]
+}

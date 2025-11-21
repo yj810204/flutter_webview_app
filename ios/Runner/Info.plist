@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Flutter WebView App</string>
+	<string>Flutter Webview App</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -53,11 +53,13 @@
 		<true/>
 	</dict>
 	
-	<!-- 카메라/갤러리 접근 권한 (필요한 경우) -->
+	<!-- 카메라/갤러리 접근 권한 -->
 	<key>NSCameraUsageDescription</key>
 	<string>사진을 촬영하기 위해 카메라 접근이 필요합니다.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>사진을 선택하기 위해 갤러리 접근이 필요합니다.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>이미지를 갤러리에 저장하기 위해 권한이 필요합니다.</string>
 	
 	<!-- 위치 권한 -->
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -90,4 +92,3 @@
 	</array>
 </dict>
 </plist>
-

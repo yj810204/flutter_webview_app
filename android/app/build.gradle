@@ -62,8 +62,46 @@ flutter {
 }
 
 dependencies {
+    // AppCompat for SplashActivity
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    
     // Firebase BOM (google-services.json 파일이 있을 때만 주석 해제)
     // implementation platform('com.google.firebase:firebase-bom:32.7.0')
     // implementation 'com.google.firebase:firebase-messaging'
+}
+
+// Flutter AppConfig에서 네이티브 설정 파일 자동 생성
+task generateNativeConfig(type: Exec) {
+    description = 'Generate native config files from Flutter AppConfig'
+    group = 'build'
+    
+    def flutterRoot = localProperties.getProperty('flutter.sdk')
+    if (flutterRoot == null) {
+        throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+    }
+    
+    def dartExecutable = "$flutterRoot/bin/dart"
+    if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+        dartExecutable = "$flutterRoot/bin/dart.bat"
+    }
+    
+    workingDir = rootProject.projectDir.parentFile
+    commandLine dartExecutable, 'scripts/generate_native_config.dart'
+    
+    // lib/config/app_config.dart가 변경되었을 때만 실행
+    inputs.file("${rootProject.projectDir.parentFile}/lib/config/app_config.dart")
+    outputs.file("${projectDir}/src/main/kotlin/com/example/flutter_webview_app/AppConfig.kt")
+    outputs.file("${projectDir}/src/main/assets/app_config.json")
+}
+
+// preBuild 전에 네이티브 설정 생성
+afterEvaluate {
+    // Kotlin 컴파일 전에 설정 파일 생성
+    tasks.named('compileDebugKotlin').configure { it.dependsOn generateNativeConfig }
+    tasks.named('compileReleaseKotlin').configure { it.dependsOn generateNativeConfig }
+    
+    // Assets 병합 전에 설정 파일 생성 (app_config.json이 assets에 포함됨)
+    tasks.named('mergeDebugAssets').configure { it.dependsOn generateNativeConfig }
+    tasks.named('mergeReleaseAssets').configure { it.dependsOn generateNativeConfig }
 }
 
