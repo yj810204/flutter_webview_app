@@ -12,7 +12,7 @@ class AppConfig {
   // ==================== 웹사이트 및 서버 설정 ====================
   /// 웹사이트 URL - 여기서 변경하면 다른 웹사이트용 앱으로 변환 가능
   /// Android/iOS 네이티브 코드에 자동 동기화됨
-  static const String websiteUrl = 'https://howtattoo.co.kr/';
+  static const String websiteUrl = 'https://codejaka01.cafe24.com/mb_test/';
   
   /// 서버 API 경로 - Android/iOS에 자동 동기화됨
   static const String serverApiPathAppInfo = 'modules/appmgmt/libs/appInfo.php';
@@ -24,10 +24,10 @@ class AppConfig {
   static const String appName = 'Flutter WebView App';
   
   /// Android 패키지명 - Android에 자동 동기화됨
-  static const String androidPackageName = 'com.example.flutter_webview_app';
+  static const String androidPackageName = 'hello.mobile';
   
   /// iOS 번들 ID - iOS에 자동 동기화됨
-  static const String iosBundleId = 'com.example.flutterWebviewApp';
+  static const String iosBundleId = 'com.hello.mobile';
   
   /// 앱 버전 (User-Agent에 사용) - Android/iOS에 자동 동기화됨
   /// package_info_plus로 가져올 수도 있지만, 여기서 설정 가능
@@ -49,9 +49,9 @@ class AppConfig {
   
   // ==================== Method Channel 설정 ====================
   /// MethodChannel 이름들 - Android/iOS에 자동 동기화됨
-  static const String methodChannelGeolocation = 'com.example.flutter_webview_app/geolocation';
-  static const String methodChannelWebview = 'com.example.flutter_webview_app/webview';
-  static const String methodChannelImage = 'com.example.flutter_webview_app/image';
+  static const String methodChannelGeolocation = 'hello.mobile/geolocation';
+  static const String methodChannelWebview = 'hello.mobile/webview';
+  static const String methodChannelImage = 'hello.mobile/image';
   
   // ==================== JavaScript 채널 설정 ====================
   /// JavaScript 채널 이름
@@ -78,7 +78,7 @@ class AppConfig {
   /// Firebase 프로젝트 설정 - Android/iOS에 자동 동기화됨
   /// Firebase Console에서 프로젝트를 생성한 후 google-services.json과 GoogleService-Info.plist를 추가하세요
   /// Firebase 설정 파일이 없으면 false로 설정하세요
-  static const bool useFirebase = false;
+  static const bool useFirebase = true;
   
   // ==================== 소셜 로그인 설정 ====================
   /// 소셜 로그인은 웹에서 처리됩니다.

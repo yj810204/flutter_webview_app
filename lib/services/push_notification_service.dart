@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 /// 푸시 알림 서비스
 /// Firebase Cloud Messaging을 사용하여 푸시 알림을 처리합니다.
@@ -69,6 +71,16 @@ class PushNotificationService {
 
       if (_fcmToken != null) {
         _tokenController?.add(_fcmToken!);
+        // 토큰을 받은 직후 서버로 전송 시도
+        sendDeviceTokenToServer(_fcmToken!).then((success) {
+          if (success) {
+            debugPrint('✅ 초기화 시 디바이스 토큰 서버 전송 완료');
+          } else {
+            debugPrint('⚠️ 초기화 시 디바이스 토큰 서버 전송 실패 (무시)');
+          }
+        }).catchError((e) {
+          debugPrint('⚠️ 초기화 시 디바이스 토큰 서버 전송 오류 (무시): $e');
+        });
       }
 
       // 토큰 갱신 리스너
@@ -76,6 +88,16 @@ class PushNotificationService {
         _fcmToken = newToken;
         debugPrint('FCM Token 갱신: $newToken');
         _tokenController?.add(newToken);
+        // 토큰 갱신 시에도 서버로 전송
+        sendDeviceTokenToServer(newToken).then((success) {
+          if (success) {
+            debugPrint('✅ 토큰 갱신 시 디바이스 토큰 서버 전송 완료');
+          } else {
+            debugPrint('⚠️ 토큰 갱신 시 디바이스 토큰 서버 전송 실패 (무시)');
+          }
+        }).catchError((e) {
+          debugPrint('⚠️ 토큰 갱신 시 디바이스 토큰 서버 전송 오류 (무시): $e');
+        });
       });
 
       // 포그라운드 메시지 핸들러
@@ -115,6 +137,54 @@ class PushNotificationService {
   String? getUrlFromMessage(RemoteMessage message) {
     // 알림 데이터에서 URL 추출
     return message.data['url'] ?? message.data['link'];
+  }
+
+  /// 디바이스 토큰을 서버로 전송
+  /// deviceToken.php 엔드포인트로 POST 요청을 보냅니다
+  Future<bool> sendDeviceTokenToServer(String token) async {
+    try {
+      // 웹사이트 URL에서 도메인만 추출 (경로 제외)
+      final websiteUri = Uri.parse(AppConfig.websiteUrl);
+      final domain = websiteUri.host;
+      
+      if (domain.isEmpty) {
+        debugPrint('❌ 웹사이트 도메인을 가져올 수 없습니다.');
+        return false;
+      }
+
+      // deviceToken.php URL 생성 (도메인만 사용, 경로는 제외)
+      // 형식: https://domain/modules/appmgmt/libs/deviceToken.php
+      final url = 'https://$domain/${AppConfig.serverApiPathDeviceToken}';
+      debugPrint('📤 디바이스 토큰 서버 전송 시작: $url');
+      
+      // POST 요청 전송
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'device_token=$token',
+      ).timeout(
+        Duration(milliseconds: AppConfig.httpConnectTimeoutMs),
+        onTimeout: () {
+          debugPrint('❌ 디바이스 토큰 서버 전송 타임아웃');
+          throw TimeoutException('서버 전송 타임아웃');
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        debugPrint('✅ 디바이스 토큰 서버 전송 성공');
+        return true;
+      } else {
+        debugPrint('❌ 디바이스 토큰 서버 전송 실패: ${response.statusCode}');
+        debugPrint('응답 본문: ${response.body}');
+        return false;
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ 디바이스 토큰 서버 전송 오류: $e');
+      debugPrint('스택 트레이스: $stackTrace');
+      return false;
+    }
   }
 
   /// 서비스 정리

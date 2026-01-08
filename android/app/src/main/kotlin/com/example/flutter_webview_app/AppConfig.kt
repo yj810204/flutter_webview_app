@@ -15,7 +15,7 @@ object AppConfig {
     /**
      * 웹사이트 URL - Flutter AppConfig.websiteUrl에서 자동 생성
      */
-    const val WEBSITE_URL = "https://howtattoo.co.kr/"
+    const val WEBSITE_URL = "https://codejaka01.cafe24.com/mb_test/"
     
     const val SERVER_API_PATH_APP_INFO = "modules/appmgmt/libs/appInfo.php"
     const val SERVER_API_PATH_DEVICE_TOKEN = "modules/appmgmt/libs/deviceToken.php"
@@ -28,7 +28,7 @@ object AppConfig {
     
     // ==================== 앱 버전 설정 ====================
     const val APP_VERSION = "1.4.1"
-    const val APP_PACKAGE_NAME = "com.example.flutter_webview_app"
+    const val APP_PACKAGE_NAME = "hello.mobile"
     
     // ==================== 네트워크 설정 ====================
     const val HTTP_CONNECT_TIMEOUT_MS = 10000
@@ -36,9 +36,9 @@ object AppConfig {
     const val HTTP_USER_AGENT = "Android-App"
     
     // ==================== Method Channel 설정 ====================
-    const val METHOD_CHANNEL_GEOLOCATION = "com.example.flutter_webview_app/geolocation"
-    const val METHOD_CHANNEL_WEBVIEW = "com.example.flutter_webview_app/webview"
-    const val METHOD_CHANNEL_IMAGE = "com.example.flutter_webview_app/image"
+    const val METHOD_CHANNEL_GEOLOCATION = "hello.mobile/geolocation"
+    const val METHOD_CHANNEL_WEBVIEW = "hello.mobile/webview"
+    const val METHOD_CHANNEL_IMAGE = "hello.mobile/image"
     
     // ==================== WebView 타임아웃 설정 ====================
     const val JS_CONFIRM_TIMEOUT_MS = 3000
@@ -50,7 +50,7 @@ object AppConfig {
     const val PULL_TO_REFRESH_TIME_THRESHOLD = 3000
     
     // ==================== Firebase 설정 ====================
-    const val USE_FIREBASE = false
+    const val USE_FIREBASE = true
     
     // ==================== 유틸리티 메서드 ====================
     fun getWebsiteDomain(): String {

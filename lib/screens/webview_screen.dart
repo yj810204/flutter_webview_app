@@ -291,8 +291,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
             
             // sms: 스킴 처리 (문자 메시지 앱 실행)
-            if (url.startsWith('sms:')) {
+            if (url.startsWith('sms:') || url.startsWith('smsto:')) {
               _launchUrl(url);
+              return NavigationDecision.prevent;
+            }
+            
+            // mailto: 스킴 처리 (이메일 앱 실행)
+            if (url.startsWith('mailto:')) {
+              _launchUrl(url);
+              return NavigationDecision.prevent;
+            }
+            
+            // data: URL 스킴 처리 (Base64 이미지 다운로드)
+            if (url.startsWith('data:image/')) {
+              _handleDataUrlDownload(url);
               return NavigationDecision.prevent;
             }
             
@@ -1532,6 +1544,207 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  /// data: URL 처리 (Base64 이미지 다운로드)
+  /// data:image/png;base64,... 형태의 URL을 처리하여 이미지를 저장합니다
+  Future<void> _handleDataUrlDownload(String dataUrl) async {
+    debugPrint('data: URL 다운로드 요청: ${dataUrl.substring(0, dataUrl.length > 50 ? 50 : dataUrl.length)}...');
+    
+    if (!mounted) {
+      debugPrint('위젯이 마운트되지 않았습니다. 다운로드 취소');
+      return;
+    }
+
+    try {
+      // data: URL 파싱
+      // 형식: data:image/png;base64,iVBORw0KGgo...
+      if (!dataUrl.startsWith('data:image/')) {
+        debugPrint('지원하지 않는 data: URL 형식입니다.');
+        return;
+      }
+
+      // MIME 타입과 Base64 데이터 추출
+      final commaIndex = dataUrl.indexOf(',');
+      if (commaIndex == -1) {
+        debugPrint('data: URL에 Base64 데이터가 없습니다.');
+        return;
+      }
+
+      final header = dataUrl.substring(0, commaIndex);
+      final base64Data = dataUrl.substring(commaIndex + 1);
+
+      // MIME 타입에서 이미지 타입 추출 (예: image/png -> png)
+      String? imageType;
+      String? mimeType;
+      if (header.contains('image/png')) {
+        imageType = 'png';
+        mimeType = 'image/png';
+      } else if (header.contains('image/jpeg') || header.contains('image/jpg')) {
+        imageType = 'jpg';
+        mimeType = 'image/jpeg';
+      } else if (header.contains('image/gif')) {
+        imageType = 'gif';
+        mimeType = 'image/gif';
+      } else if (header.contains('image/webp')) {
+        imageType = 'webp';
+        mimeType = 'image/webp';
+      } else {
+        // 기본값으로 png 사용
+        imageType = 'png';
+        mimeType = 'image/png';
+        debugPrint('알 수 없는 이미지 타입, 기본값(png) 사용: $header');
+      }
+
+      // Base64 디코딩
+      Uint8List imageBytes;
+      try {
+        imageBytes = base64Decode(base64Data);
+        debugPrint('Base64 디코딩 완료: ${imageBytes.length} bytes');
+      } catch (e) {
+        debugPrint('Base64 디코딩 실패: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('이미지 데이터를 처리할 수 없습니다.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 저장 확인 다이얼로그 표시
+      HapticFeedback.mediumImpact();
+      final shouldSave = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            content: const Text('이미지를 저장하시겠습니까?'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.of(context).pop(false);
+                },
+                child: const Text('취소'),
+              ),
+              TextButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.of(context).pop(true);
+                },
+                child: const Text('저장'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave != true) {
+        debugPrint('사용자가 이미지 저장을 취소했습니다.');
+        return;
+      }
+
+      // 저장소 권한 확인 (기존 _saveImage와 동일한 로직)
+      if (Platform.isAndroid) {
+        Permission permission = Permission.photos;
+        final status = await permission.status;
+        if (!status.isGranted) {
+          final result = await permission.request();
+          if (!result.isGranted) {
+            if (await Permission.storage.isDenied) {
+              final storageResult = await Permission.storage.request();
+              if (!storageResult.isGranted) {
+                if (mounted) {
+                  _showAlertDialog('이미지를 저장하려면 저장소 권한이 필요합니다.');
+                }
+                return;
+              }
+            } else if (!status.isGranted) {
+              if (mounted) {
+                _showAlertDialog('이미지를 저장하려면 저장소 권한이 필요합니다.');
+              }
+              return;
+            }
+          }
+        }
+      } else if (Platform.isIOS) {
+        final status = await Permission.photos.status;
+        if (!status.isGranted) {
+          final result = await Permission.photos.request();
+          if (!result.isGranted) {
+            if (mounted) {
+              _showAlertDialog('이미지를 저장하려면 사진 라이브러리 권한이 필요합니다.');
+            }
+            return;
+          }
+        }
+      }
+
+      // 다운로드 중 메시지 표시
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('이미지를 저장하는 중...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // 파일명 생성 (타임스탬프 사용)
+      final fileName = 'image_${DateTime.now().millisecondsSinceEpoch}.$imageType';
+
+      // 플랫폼 채널을 통해 갤러리에 저장
+      const platform = MethodChannel(AppConfig.methodChannelImage);
+      
+      try {
+        final result = await platform.invokeMethod('saveImageToGallery', {
+          'imageBytes': imageBytes.toList(),
+          'fileName': fileName,
+        });
+        
+        if (mounted) {
+          if (result == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('이미지가 갤러리에 저장되었습니다.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('이미지 저장에 실패했습니다.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('이미지 저장 플랫폼 채널 오류: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('이미지 저장 중 오류가 발생했습니다.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('data: URL 처리 오류: $e');
+      debugPrint('스택 트레이스: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('이미지 다운로드 중 오류가 발생했습니다: ${e.toString()}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   /// Alert 다이얼로그 표시 (제목 없이)
   void _showAlertDialog(String message) {
     HapticFeedback.mediumImpact(); // 다이얼로그 표시 시 햅틱 피드백
@@ -1657,11 +1870,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (_pushService == null) return;
     
     try {
-      // FCM 토큰이 준비되면 웹뷰로 전송
+      // FCM 토큰이 준비되면 웹뷰로 전송 및 서버로 자동 전송
       _pushTokenSubscription = _pushService!.tokenStream?.listen((token) {
+        // 웹뷰로 토큰 전송
         if (_controller != null) {
           _jsHandler.sendFCMTokenToWebView(_controller!, token);
         }
+        
+        // 서버로 자동 전송 (백그라운드, 실패해도 무시)
+        _pushService!.sendDeviceTokenToServer(token).then((success) {
+          if (success) {
+            debugPrint('✅ 디바이스 토큰 서버 전송 완료');
+          } else {
+            debugPrint('⚠️ 디바이스 토큰 서버 전송 실패 (무시)');
+          }
+        }).catchError((e) {
+          debugPrint('⚠️ 디바이스 토큰 서버 전송 오류 (무시): $e');
+        });
       });
 
       // 푸시 알림 메시지 수신 시 처리

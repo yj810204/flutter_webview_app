@@ -3,7 +3,7 @@ plugins {
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
     // Firebase 플러그인 (google-services.json 파일이 있을 때만 활성화)
-    // id "com.google.gms.google-services"
+    id "com.google.gms.google-services"
 }
 
 def localProperties = new Properties()
@@ -43,7 +43,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.flutter_webview_app"
+        applicationId "hello.mobile"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
@@ -66,8 +66,8 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     
     // Firebase BOM (google-services.json 파일이 있을 때만 주석 해제)
-    // implementation platform('com.google.firebase:firebase-bom:32.7.0')
-    // implementation 'com.google.firebase:firebase-messaging'
+    implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
 }
 
 // Flutter AppConfig에서 네이티브 설정 파일 자동 생성

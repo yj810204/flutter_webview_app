@@ -21,6 +21,49 @@
     <!-- Android 13 이상 미디어 권한 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
+    <!-- Android 11+ (API 30+) 외부 앱 쿼리 선언 -->
+    <!-- 외부 브라우저, 전화, 문자 등 다른 앱을 실행하기 위해 필요 -->
+    <!-- 참고: 각 intent 태그에는 하나의 data scheme만 허용됩니다 -->
+    <queries>
+        <!-- HTTP URL 처리 (브라우저 앱) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+        
+        <!-- HTTPS URL 처리 (브라우저 앱) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        
+        <!-- 전화 앱 -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        
+        <!-- 문자 메시지 앱 (SMS) -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="sms" />
+        </intent>
+        
+        <!-- 문자 메시지 앱 (SMSTO) -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        
+        <!-- 이메일 앱 -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+    </queries>
+
     <application
         android:label="Flutter WebView App"
         android:name="${applicationName}"
@@ -28,7 +71,7 @@
         android:usesCleartextTraffic="true">
         <!-- SplashActivity: 앱 시작 시 스플래시 화면 표시 -->
         <activity
-            android:name=".SplashActivity"
+            android:name="com.example.flutter_webview_app.SplashActivity"
             android:exported="true"
             android:theme="@style/SplashTheme"
             android:launchMode="singleTop"
@@ -41,7 +84,7 @@
         
         <!-- MainActivity: Flutter 웹뷰 화면 -->
         <activity
-            android:name=".MainActivity"
+            android:name="com.example.flutter_webview_app.MainActivity"
             android:exported="false"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"

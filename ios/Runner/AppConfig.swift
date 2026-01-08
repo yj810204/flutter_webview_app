@@ -11,7 +11,7 @@ import Foundation
 struct AppConfig {
     // ==================== 웹사이트 및 서버 설정 ====================
     /// 웹사이트 URL - Flutter AppConfig.websiteUrl에서 자동 생성
-    static let websiteUrl = "https://howtattoo.co.kr/"
+    static let websiteUrl = "https://codejaka01.cafe24.com/mb_test/"
     
     static let serverApiPathAppInfo = "modules/appmgmt/libs/appInfo.php"
     static let serverApiPathAppInfoIOS = "modules/appmgmt/libs/appInfo_ios.php"
@@ -25,7 +25,7 @@ struct AppConfig {
     
     // ==================== 앱 버전 설정 ====================
     static let appVersion = "1.4.1"
-    static let iosBundleId = "com.example.flutterWebviewApp"
+    static let iosBundleId = "com.hello.mobile"
     
     // ==================== 네트워크 설정 ====================
     static let httpConnectTimeoutMs: TimeInterval = 10000 / 1000.0
@@ -33,9 +33,9 @@ struct AppConfig {
     static let httpUserAgent = "iOS-App"
     
     // ==================== Method Channel 설정 ====================
-    static let methodChannelGeolocation = "com.example.flutter_webview_app/geolocation"
-    static let methodChannelWebview = "com.example.flutter_webview_app/webview"
-    static let methodChannelImage = "com.example.flutter_webview_app/image"
+    static let methodChannelGeolocation = "hello.mobile/geolocation"
+    static let methodChannelWebview = "hello.mobile/webview"
+    static let methodChannelImage = "hello.mobile/image"
     
     // ==================== WebView 타임아웃 설정 ====================
     static let jsConfirmTimeoutMs: TimeInterval = 3000 / 1000.0
@@ -47,7 +47,7 @@ struct AppConfig {
     static let pullToRefreshTimeThreshold: TimeInterval = 3000 / 1000.0
     
     // ==================== Firebase 설정 ====================
-    static let useFirebase = false
+    static let useFirebase = true
     
     // ==================== 유틸리티 메서드 ====================
     static func getWebsiteDomain() -> String {
