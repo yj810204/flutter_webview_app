@@ -118,7 +118,20 @@ class JsChannelHandler {
     
     final token = _pushService!.fcmToken;
     if (token != null) {
+      // 웹뷰로 토큰 전송
       sendFCMTokenToWebView(_controller!, token);
+      
+      // 웹 페이지에서 요청한 경우 서버로도 자동 전송 (로그인 후 등록 보장)
+      // WebViewController를 전달하여 쿠키가 포함되도록 함
+      _pushService!.sendDeviceTokenToServer(token, controller: _controller).then((success) {
+        if (success) {
+          debugPrint('웹 페이지 요청 시 디바이스 토큰 서버 전송 완료');
+        } else {
+          debugPrint('웹 페이지 요청 시 디바이스 토큰 서버 전송 실패');
+        }
+      }).catchError((e) {
+        debugPrint('웹 페이지 요청 시 디바이스 토큰 서버 전송 오류: $e');
+      });
     } else {
       debugPrint('FCM 토큰을 가져올 수 없습니다');
     }

@@ -32,6 +32,7 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
@@ -68,6 +69,9 @@ dependencies {
     // Firebase BOM (google-services.json 파일이 있을 때만 주석 해제)
     implementation platform('com.google.firebase:firebase-bom:32.7.0')
     implementation 'com.google.firebase:firebase-messaging'
+    
+    // Core library desugaring (flutter_local_notifications 요구사항)
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 }
 
 // Flutter AppConfig에서 네이티브 설정 파일 자동 생성

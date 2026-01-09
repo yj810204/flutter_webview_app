@@ -28,6 +28,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   WebViewController? _controller;
   late final JsChannelHandler _jsHandler;
   PushNotificationService? _pushService;
+  DateTime? _lastTokenSendTime; // 마지막 토큰 전송 시간 (디바운싱용)
   bool _isLoading = true;
   double _loadingProgress = 0.0;
   bool _canGoBack = false;
@@ -277,6 +278,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             _updateNavigationState();
             // 페이지 로드 완료 후에도 다시 주입 (확실하게)
             _injectJavaScriptBridge();
+            
+            // 페이지 로드 완료 시 디바이스 토큰 재전송 (로그인 후 등록 보장)
+            _resendDeviceTokenIfNeeded();
           },
           onWebResourceError: (WebResourceError error) {
             debugPrint('웹뷰 오류: ${error.description}');
@@ -2417,6 +2421,52 @@ class _WebViewScreenState extends State<WebViewScreen> {
     );
   }
 
+  /// 페이지 로드 완료 시 디바이스 토큰 재전송 (로그인 후 등록 보장)
+  Future<void> _resendDeviceTokenIfNeeded() async {
+    if (_pushService == null) return;
+    
+    final token = _pushService!.fcmToken;
+    if (token == null) {
+      debugPrint('FCM 토큰이 없어 디바이스 토큰 재전송을 건너뜁니다.');
+      return;
+    }
+    
+    // 디바운싱: 30초 이내에 전송한 경우 건너뜀
+    final now = DateTime.now();
+    if (_lastTokenSendTime != null) {
+      final timeSinceLastSend = now.difference(_lastTokenSendTime!);
+      if (timeSinceLastSend.inSeconds < 30) {
+        debugPrint('디바이스 토큰 재전송 건너뜀 (최근 전송: ${timeSinceLastSend.inSeconds}초 전)');
+        return;
+      }
+    }
+    
+    // 로그인 페이지가 아닌 경우에만 재전송
+    if (_controller != null) {
+      try {
+        final currentUrl = await _controller!.currentUrl();
+        if (currentUrl != null && (currentUrl.contains('/login') || currentUrl.contains('/member/login'))) {
+          debugPrint('로그인 페이지에서는 디바이스 토큰 재전송을 건너뜁니다.');
+          return;
+        }
+      } catch (e) {
+        debugPrint('현재 URL 확인 오류: $e');
+      }
+    }
+    
+    debugPrint('페이지 로드 완료 - 디바이스 토큰 재전송 시작');
+    _pushService!.sendDeviceTokenToServer(token, controller: _controller).then((success) {
+      if (success) {
+        _lastTokenSendTime = now;
+        debugPrint('페이지 로드 완료 시 디바이스 토큰 서버 전송 완료');
+      } else {
+        debugPrint('페이지 로드 완료 시 디바이스 토큰 서버 전송 실패');
+      }
+    }).catchError((e) {
+      debugPrint('페이지 로드 완료 시 디바이스 토큰 서버 전송 오류: $e');
+    });
+  }
+
   /// 푸시 알림 설정
   void _setupPushNotifications() {
     if (_pushService == null) return;
@@ -2430,8 +2480,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         }
         
         // 서버로 자동 전송 (백그라운드, 실패해도 무시)
-        _pushService!.sendDeviceTokenToServer(token).then((success) {
+        // WebViewController가 있으면 쿠키 포함하여 전송
+        _pushService!.sendDeviceTokenToServer(token, controller: _controller).then((success) {
           if (success) {
+            _lastTokenSendTime = DateTime.now();
             debugPrint('디바이스 토큰 서버 전송 완료');
           } else {
             debugPrint('디바이스 토큰 서버 전송 실패 (무시)');
@@ -2445,7 +2497,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
       _pushMessageSubscription = _pushService!.messageStream?.listen((message) {
         final url = _pushService!.getUrlFromMessage(message);
         if (url != null && _controller != null) {
+          debugPrint('푸시 알림 클릭 - URL로 이동: $url');
           _controller!.loadRequest(Uri.parse(url));
+        } else {
+          debugPrint('푸시 알림 클릭 - URL이 없거나 컨트롤러가 null입니다.');
         }
       });
     } catch (e) {
