@@ -349,9 +349,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ..addJavaScriptChannel(
         _jsHandler.channelName,
         onMessageReceived: (JavaScriptMessage message) {
+          debugPrint('📨 JavaScript 채널 메시지 수신: ${message.message}');
           _jsHandler.handleMessage(message.message);
         },
       );
+      
+      debugPrint('✅ JavaScript 채널 등록 완료: ${_jsHandler.channelName}');
       
       // Android WebView 팝업 지원 및 파일 선택기 설정 (webview_flutter_android 사용)
       if (Platform.isAndroid && controller.platform is AndroidWebViewController) {
@@ -951,6 +954,34 @@ class _WebViewScreenState extends State<WebViewScreen> {
         console.log('JavaScript alert/confirm/prompt 오버라이드 완료');
       })();
       
+      // 우편번호 검색 트리거 함수 (공통)
+      function triggerNativePostcodeSearch() {
+        console.log('[Flutter] 🔍 네이티브 우편번호 검색 트리거');
+        
+        // Flutter로 메시지 전송하여 네이티브 우편번호 검색 실행
+        try {
+          const message = JSON.stringify({
+            action: 'searchPostcode'
+          });
+          console.log('[Flutter] 📤 우편번호 검색 메시지 전송 시도:', message);
+          console.log('[Flutter] 📤 채널 이름:', '${AppConfig.jsChannelName}');
+          console.log('[Flutter] 📤 채널 존재 여부:', typeof ${AppConfig.jsChannelName} !== 'undefined');
+          
+          if (typeof ${AppConfig.jsChannelName} === 'undefined') {
+            console.error('[Flutter] ❌ JavaScript 채널이 정의되지 않았습니다!');
+            throw new Error('JavaScript 채널이 정의되지 않았습니다');
+          }
+          
+          ${AppConfig.jsChannelName}.postMessage(message);
+          console.log('[Flutter] ✅ 네이티브 우편번호 검색 요청 전송 완료');
+          return true;
+        } catch (e) {
+          console.error('[Flutter] ❌ 우편번호 검색 요청 실패:', e);
+          console.error('[Flutter] ❌ 오류 스택:', e.stack);
+          return false;
+        }
+      }
+      
       // initDaumPostcode() 함수 오버라이드 - 네이티브 우편번호 검색 사용
       // WebView 팝업 크래시 문제를 해결하기 위해 네이티브 Flutter 화면을 사용합니다.
       (function() {
@@ -961,28 +992,121 @@ class _WebViewScreenState extends State<WebViewScreen> {
         
         // initDaumPostcode() 함수 오버라이드
         window.initDaumPostcode = function() {
-          console.log('[Flutter] initDaumPostcode 호출 감지, 네이티브 우편번호 검색 실행');
+          console.log('[Flutter] 🔍 initDaumPostcode 호출 감지, 네이티브 우편번호 검색 실행');
           
-          // Flutter로 메시지 전송하여 네이티브 우편번호 검색 실행
-          try {
-            const message = JSON.stringify({
-              action: 'searchPostcode'
-            });
-            ${AppConfig.jsChannelName}.postMessage(message);
-            console.log('[Flutter] 네이티브 우편번호 검색 요청 전송 완료');
-          } catch (e) {
-            console.error('[Flutter] 우편번호 검색 요청 실패:', e);
+          if (!triggerNativePostcodeSearch()) {
             // 실패 시 원래 함수 호출 (fallback)
             if (originalInitDaumPostcode && typeof originalInitDaumPostcode === 'function') {
-              console.log('[Flutter] fallback: 원래 initDaumPostcode 호출');
+              console.log('[Flutter] 🔄 fallback: 원래 initDaumPostcode 호출');
               originalInitDaumPostcode.call(this);
             } else {
-              console.error('[Flutter] 원래 initDaumPostcode 함수를 찾을 수 없습니다');
+              console.error('[Flutter] ❌ 원래 initDaumPostcode 함수를 찾을 수 없습니다');
             }
           }
         };
         
         console.log('[Flutter] initDaumPostcode 오버라이드 완료');
+      })();
+      
+      // daum.Postcode 생성자 오버라이드 (new daum.Postcode() 패턴 지원)
+      (function() {
+        console.log('[Flutter] daum.Postcode 생성자 오버라이드 시작');
+        
+        // daum 객체가 없으면 생성
+        if (typeof window.daum === 'undefined') {
+          window.daum = {};
+        }
+        
+        // 원래 Postcode 생성자 저장 (있을 경우)
+        const originalPostcode = window.daum.Postcode;
+        
+        // Postcode 생성자 오버라이드
+        window.daum.Postcode = function(options) {
+          console.log('[Flutter] 🔍 new daum.Postcode() 호출 감지, 네이티브 우편번호 검색 실행');
+          console.log('[Flutter] 옵션:', options);
+          
+          // 네이티브 우편번호 검색 실행
+          if (triggerNativePostcodeSearch()) {
+            // 네이티브 검색이 성공하면 가짜 객체 반환 (웹 페이지 호환성)
+            return {
+              open: function() {
+                console.log('[Flutter] 가짜 Postcode.open() 호출 (이미 네이티브 검색 실행됨)');
+              },
+              embed: function() {
+                console.log('[Flutter] 가짜 Postcode.embed() 호출 (이미 네이티브 검색 실행됨)');
+              }
+            };
+          } else {
+            // 실패 시 원래 생성자 호출 (fallback)
+            if (originalPostcode && typeof originalPostcode === 'function') {
+              console.log('[Flutter] 🔄 fallback: 원래 daum.Postcode 생성자 호출');
+              return new originalPostcode(options);
+            } else {
+              console.error('[Flutter] ❌ 원래 daum.Postcode 생성자를 찾을 수 없습니다');
+              return null;
+            }
+          }
+        };
+        
+        console.log('[Flutter] daum.Postcode 생성자 오버라이드 완료');
+      })();
+      
+      // 우편번호 검색 관련 버튼 클릭 이벤트 가로채기 (추가 보안)
+      (function() {
+        console.log('[Flutter] 우편번호 검색 버튼 이벤트 리스너 추가 시작');
+        
+        // 문서 로드 완료 후 이벤트 리스너 추가
+        function addPostcodeButtonListeners() {
+          // 일반적인 우편번호 검색 버튼 선택자들
+          const selectors = [
+            'button[onclick*="postcode"]',
+            'button[onclick*="Postcode"]',
+            'button[onclick*="우편번호"]',
+            'a[onclick*="postcode"]',
+            'a[onclick*="Postcode"]',
+            'a[onclick*="우편번호"]',
+            '.postcode-btn',
+            '.postcode-button',
+            '#postcode-btn',
+            '#postcode-button'
+          ];
+          
+          selectors.forEach(function(selector) {
+            try {
+              const elements = document.querySelectorAll(selector);
+              elements.forEach(function(element) {
+                element.addEventListener('click', function(e) {
+                  console.log('[Flutter] 🔍 우편번호 검색 버튼 클릭 감지:', selector);
+                  // 네이티브 검색 실행
+                  if (triggerNativePostcodeSearch()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                  }
+                }, true); // capture phase에서 실행
+              });
+            } catch (e) {
+              console.warn('[Flutter] 선택자 오류:', selector, e);
+            }
+          });
+        }
+        
+        // 즉시 실행
+        addPostcodeButtonListeners();
+        
+        // DOM 변경 감지 (동적으로 추가된 버튼도 감지)
+        if (typeof MutationObserver !== 'undefined') {
+          const observer = new MutationObserver(function(mutations) {
+            addPostcodeButtonListeners();
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        }
+        
+        console.log('[Flutter] 우편번호 검색 버튼 이벤트 리스너 추가 완료');
       })();
       
       // 이미지 길게 누르기 이벤트 처리
@@ -1263,10 +1387,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   /// 네이티브 우편번호 검색 실행
   void _searchPostcode() async {
-    debugPrint('네이티브 우편번호 검색 시작');
+    debugPrint('🔍 네이티브 우편번호 검색 시작');
     
     if (!mounted) {
-      debugPrint('위젯이 마운트되지 않았습니다. 우편번호 검색 취소');
+      debugPrint('❌ 위젯이 마운트되지 않았습니다. 우편번호 검색 취소');
       return;
     }
     
@@ -1275,110 +1399,222 @@ class _WebViewScreenState extends State<WebViewScreen> {
       _postcodeServer ??= DaumPostcodeLocalServer();
       if (!_postcodeServer!.isRunning) {
         await _postcodeServer!.start();
-        debugPrint('우편번호 검색 로컬 서버 시작: ${_postcodeServer!.url}');
+        debugPrint('✅ 우편번호 검색 로컬 서버 시작: ${_postcodeServer!.url}');
       }
       
-      // WebView를 사용한 다이얼로그 표시
-      final result = await Navigator.of(context).push<DataModel>(
-        MaterialPageRoute(
-          builder: (context) => _DaumPostcodeDialog(
-            serverUrl: _postcodeServer!.url,
-            onResult: (data) {
-              // DaumPostcodeChannel에서 이미 pop(data)를 호출하므로 여기서는 처리 불필요
-              // 하지만 콜백이 필요할 수 있으므로 유지
-            },
-          ),
-        ),
-      );
+      debugPrint('📱 다이얼로그 표시 시작');
+      
+      // 다음 프레임에서 다이얼로그 표시 (Context 안정화를 위해)
+      DataModel? result;
+      await Future.delayed(Duration(milliseconds: 100));
+      
+      if (!mounted) {
+        debugPrint('❌ 위젯이 마운트 해제되었습니다. 다이얼로그 표시 취소');
+        return;
+      }
+      
+      // WebView를 사용한 다이얼로그 표시 (showDialog 사용)
+      try {
+        result = await showDialog<DataModel>(
+          context: context,
+          barrierDismissible: true,
+          barrierColor: Colors.black54,
+          useRootNavigator: false, // 현재 Navigator 사용
+          builder: (BuildContext dialogContext) {
+            debugPrint('🔨 다이얼로그 빌더 실행');
+            return _DaumPostcodeDialog(
+              serverUrl: _postcodeServer!.url,
+              onResult: (data) {
+                debugPrint('📥 다이얼로그 결과 콜백: $data');
+                // DaumPostcodeChannel에서 이미 pop(data)를 호출하므로 여기서는 처리 불필요
+                // 하지만 콜백이 필요할 수 있으므로 유지
+              },
+            );
+          },
+        );
+      } catch (e, stackTrace) {
+        debugPrint('❌ showDialog 오류: $e');
+        debugPrint('스택 트레이스: $stackTrace');
+        return;
+      }
+      
+      debugPrint('📋 다이얼로그 결과: $result');
       
       if (result != null) {
-        debugPrint('우편번호 검색 결과: $result');
+        debugPrint('✅ 우편번호 검색 결과: $result');
         _handleNativePostcodeResult(result);
       } else {
-        debugPrint('우편번호 검색이 취소되었습니다.');
+        debugPrint('⚠️ 우편번호 검색이 취소되었습니다.');
       }
     } catch (e, stackTrace) {
-      debugPrint('우편번호 검색 오류: $e');
+      debugPrint('❌ 우편번호 검색 오류: $e');
       debugPrint('스택 트레이스: $stackTrace');
     }
   }
 
   /// 네이티브 우편번호 검색 결과 처리
   void _handleNativePostcodeResult(DataModel result) {
-    debugPrint('네이티브 우편번호 검색 결과 처리: ${result.toString()}');
+    debugPrint('📥 네이티브 우편번호 검색 결과 처리 시작: ${result.toString()}');
     
     if (_controller != null && mounted) {
-      // 우편번호와 주소를 웹 페이지의 input 필드에 설정
-      // postal ID에 zonecode 설정
-      // addr ID에 roadAddress 또는 jibunAddress 설정
-      
       final zonecode = result.zonecode ?? '';
       final roadAddress = result.roadAddress ?? '';
       final jibunAddress = result.jibunAddress ?? '';
       final address = roadAddress.isNotEmpty ? roadAddress : jibunAddress;
       
-      debugPrint('우편번호: $zonecode, 주소: $address');
+      debugPrint('📋 우편번호: $zonecode, 도로명주소: $roadAddress, 지번주소: $jibunAddress');
       
-      // JavaScript로 input 필드에 값 설정
+      // JavaScript로 결과를 여러 방법으로 전달
+      // JSON을 사용하여 안전하게 데이터 전달
+      final postcodeDataJson = jsonEncode({
+        'zonecode': zonecode,
+        'roadAddress': roadAddress,
+        'jibunAddress': jibunAddress,
+        'address': address,
+        'userSelectedType': result.userSelectedType ?? 'R',
+        'buildingName': result.buildingName ?? '',
+        'apartment': result.apartment ?? '',
+        'sido': result.sido ?? '',
+        'sigungu': result.sigungu ?? '',
+        'sigunguCode': result.sigunguCode ?? '',
+        'bname': result.bname ?? '',
+        'roadname': result.roadname ?? '',
+      });
+      
       final script = '''
         (function() {
           try {
-            console.log('[Flutter] 네이티브 우편번호 검색 결과를 필드에 설정');
+            console.log('[Flutter] 📥 네이티브 우편번호 검색 결과를 웹 페이지에 전달 시작');
             
-            // postal 필드에 우편번호 설정
-            const postalField = document.getElementById('postal');
-            if (postalField) {
-              postalField.value = '$zonecode';
-              console.log('[Flutter] postal 필드에 우편번호 설정: $zonecode');
-              
-              // change 이벤트 발생 (웹 페이지의 이벤트 리스너 트리거)
-              postalField.dispatchEvent(new Event('change', { bubbles: true }));
-              postalField.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-              console.error('[Flutter] postal 필드를 찾을 수 없습니다');
+            // 결과 데이터 객체 생성 (JSON 파싱)
+            const postcodeData = $postcodeDataJson;
+            
+            console.log('[Flutter] 📋 우편번호 검색 결과 데이터:', postcodeData);
+            
+            // 방법 1: 전역 함수 호출 (웹 페이지가 등록한 경우)
+            if (typeof window.handlePostcodeResult === 'function') {
+              console.log('[Flutter] ✅ window.handlePostcodeResult 호출');
+              window.handlePostcodeResult(postcodeData);
             }
             
-            // addr 필드에 주소 설정 (도로명 주소 우선)
-            const addrField = document.getElementById('addr');
-            if (addrField) {
-              const roadAddr = '$roadAddress';
-              addrField.value = roadAddr || '$jibunAddress';
-              console.log('[Flutter] addr 필드에 주소 설정:', addrField.value);
-              
-              // change 이벤트 발생 (웹 페이지의 이벤트 리스너 트리거)
-              addrField.dispatchEvent(new Event('change', { bubbles: true }));
-              addrField.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-              console.error('[Flutter] addr 필드를 찾을 수 없습니다');
-            }
+            // 방법 2: 전역 변수에 저장
+            window.postcodeResult = postcodeData;
+            console.log('[Flutter] ✅ window.postcodeResult에 저장');
             
-            // oncomplete 콜백이 있으면 호출 (웹 페이지가 콜백을 등록한 경우)
-            if (typeof window.daumPostcodeCallback === 'function') {
-              console.log('[Flutter] window.daumPostcodeCallback 호출');
-              window.daumPostcodeCallback({
-                zonecode: '$zonecode',
-                roadAddress: '$roadAddress',
-                jibunAddress: '$jibunAddress',
-                address: '$address'
+            // 방법 3: CustomEvent 발생
+            try {
+              const postcodeEvent = new CustomEvent('postcodeComplete', { 
+                detail: postcodeData,
+                bubbles: true,
+                cancelable: true
               });
+              window.dispatchEvent(postcodeEvent);
+              document.dispatchEvent(postcodeEvent);
+              console.log('[Flutter] ✅ postcodeComplete 이벤트 발생');
+            } catch (e) {
+              console.warn('[Flutter] ⚠️ 이벤트 발생 오류:', e);
             }
             
-            console.log('[Flutter] 우편번호 검색 결과 설정 완료');
+            // 방법 4: daumPostcodeCallback 호출 (가장 일반적인 패턴)
+            if (typeof window.daumPostcodeCallback === 'function') {
+              console.log('[Flutter] ✅ window.daumPostcodeCallback 호출');
+              window.daumPostcodeCallback(postcodeData);
+            }
+            
+            // 방법 5: 전역 객체 배열에 저장
+            if (!window.daumPostcodeResults) {
+              window.daumPostcodeResults = [];
+            }
+            window.daumPostcodeResults.push(postcodeData);
+            console.log('[Flutter] ✅ window.daumPostcodeResults에 추가');
+            
+            // 방법 6: jQuery 이벤트 (jQuery가 있는 경우)
+            if (typeof jQuery !== 'undefined') {
+              try {
+                jQuery(window).trigger('postcodeComplete', postcodeData);
+                jQuery(document).trigger('postcodeComplete', postcodeData);
+                console.log('[Flutter] ✅ jQuery postcodeComplete 이벤트 발생');
+              } catch (e) {
+                console.warn('[Flutter] ⚠️ jQuery 이벤트 오류:', e);
+              }
+            }
+            
+            // 방법 7: 일반적인 필드 ID 패턴으로 직접 설정 시도
+            const zonecodeValue = postcodeData.zonecode || '';
+            const addressValue = postcodeData.roadAddress || postcodeData.jibunAddress || '';
+            
+            const fieldPatterns = [
+              { postal: ['postal', 'postcode', 'zipcode', 'zip', 'zonecode'], 
+                addr: ['addr', 'address', 'roadAddress', 'road_addr', 'jibunAddress', 'jibun_addr'] },
+              { postal: ['postal_code', 'post_code'], 
+                addr: ['address1', 'addr1', 'road_addr1'] },
+              { postal: ['buyer_postcode', 'receiver_postcode'], 
+                addr: ['buyer_addr', 'receiver_addr'] }
+            ];
+            
+            let fieldFound = false;
+            for (const pattern of fieldPatterns) {
+              for (const postalId of pattern.postal) {
+                const postalField = document.getElementById(postalId) || 
+                                   document.querySelector('[name="' + postalId + '"]') ||
+                                   document.querySelector('input[placeholder*="우편번호"]') ||
+                                   document.querySelector('input[placeholder*="postal"]');
+                if (postalField) {
+                  postalField.value = zonecodeValue;
+                  postalField.dispatchEvent(new Event('change', { bubbles: true }));
+                  postalField.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('[Flutter] ✅ 필드에 우편번호 설정:', postalId, '=', zonecodeValue);
+                  fieldFound = true;
+                  break;
+                }
+              }
+              
+              for (const addrId of pattern.addr) {
+                const addrField = document.getElementById(addrId) || 
+                                 document.querySelector('[name="' + addrId + '"]') ||
+                                 document.querySelector('input[placeholder*="주소"]') ||
+                                 document.querySelector('input[placeholder*="address"]');
+                if (addrField) {
+                  addrField.value = addressValue;
+                  addrField.dispatchEvent(new Event('change', { bubbles: true }));
+                  addrField.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('[Flutter] ✅ 필드에 주소 설정:', addrId, '=', addressValue);
+                  fieldFound = true;
+                  break;
+                }
+              }
+              
+              if (fieldFound) break;
+            }
+            
+            // 방법 8: postMessage로 전달 (iframe 등에서 사용)
+            try {
+              window.postMessage({
+                type: 'daumPostcodeComplete',
+                data: postcodeData
+              }, '*');
+              console.log('[Flutter] ✅ postMessage로 전달');
+            } catch (e) {
+              console.warn('[Flutter] ⚠️ postMessage 오류:', e);
+            }
+            
+            console.log('[Flutter] ✅ 우편번호 검색 결과 전달 완료');
           } catch (e) {
-            console.error('[Flutter] 우편번호 검색 결과 설정 오류:', e);
+            console.error('[Flutter] ❌ 우편번호 검색 결과 전달 오류:', e);
+            console.error('[Flutter] 오류 스택:', e.stack);
           }
         })();
       ''';
       
       try {
         _controller!.runJavaScript(script);
-        debugPrint('우편번호 검색 결과를 웹 페이지에 설정 완료');
+        debugPrint('✅ 우편번호 검색 결과를 웹 페이지에 전달 완료');
       } catch (e, stackTrace) {
-        debugPrint('우편번호 검색 결과 설정 오류: $e');
+        debugPrint('❌ 우편번호 검색 결과 전달 오류: $e');
         debugPrint('스택 트레이스: $stackTrace');
       }
     } else {
-      debugPrint('WebViewController가 null이거나 위젯이 마운트되지 않았습니다.');
+      debugPrint('❌ WebViewController가 null이거나 위젯이 마운트되지 않았습니다.');
     }
   }
 
@@ -1975,11 +2211,13 @@ class _DaumPostcodeDialogState extends State<_DaumPostcodeDialog> {
   @override
   void initState() {
     super.initState();
+    debugPrint('🔨 _DaumPostcodeDialogState initState 호출');
     _dialogJsHandler = JsChannelHandler();
     _initializeDialogWebView();
   }
 
   Future<void> _initializeDialogWebView() async {
+    debugPrint('🔨 다이얼로그 WebView 초기화 시작');
     try {
       final controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -2062,6 +2300,7 @@ class _DaumPostcodeDialogState extends State<_DaumPostcodeDialog> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🔨 _DaumPostcodeDialog build 호출');
     return Dialog(
       insetPadding: EdgeInsets.zero,
       child: SafeArea(

@@ -47,11 +47,11 @@ class JsChannelHandler {
   /// JavaScript 메시지 처리 (WebViewScreen에서 호출)
   void handleMessage(String message) {
     try {
-      debugPrint('JavaScript 채널 메시지 수신 (원본): $message');
+      debugPrint('📨 JavaScript 채널 메시지 수신 (원본): $message');
       final Map<String, dynamic> data = jsonDecode(message);
       final String action = data['action'] ?? '';
 
-      debugPrint('JavaScript 채널 메시지 수신: $action');
+      debugPrint('📨 JavaScript 채널 메시지 수신: action=$action');
 
       switch (action) {
         case 'getFCMToken':
@@ -89,7 +89,7 @@ class JsChannelHandler {
           _handleShowPrompt(data);
           break;
         case 'searchPostcode':
-          debugPrint('우편번호 검색 액션 감지됨');
+          debugPrint('🔍 우편번호 검색 액션 감지됨!');
           _handleSearchPostcode();
           break;
         case 'postcodeResult':
@@ -286,12 +286,13 @@ class JsChannelHandler {
 
   /// 우편번호 검색 처리 (네이티브)
   void _handleSearchPostcode() {
-    debugPrint('네이티브 우편번호 검색 요청');
+    debugPrint('🔍 네이티브 우편번호 검색 요청 수신');
     
     if (onSearchPostcode != null) {
+      debugPrint('✅ onSearchPostcode 콜백 호출');
       onSearchPostcode!();
     } else {
-      debugPrint('onSearchPostcode 콜백이 설정되지 않았습니다.');
+      debugPrint('❌ onSearchPostcode 콜백이 설정되지 않았습니다.');
     }
   }
 
