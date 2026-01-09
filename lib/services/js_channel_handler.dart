@@ -89,7 +89,7 @@ class JsChannelHandler {
           _handleShowPrompt(data);
           break;
         case 'searchPostcode':
-          debugPrint('🔍 우편번호 검색 액션 감지됨!');
+          debugPrint('우편번호 검색 액션 감지됨!');
           _handleSearchPostcode();
           break;
         case 'postcodeResult':
@@ -173,13 +173,13 @@ class JsChannelHandler {
       if (position != null && _controller != null) {
         final jsPosition = _locationService.positionToJsFormat(position);
         sendLocationToWebView(_controller!, jsPosition, requestId);
-        debugPrint('✅ 위치 정보를 JavaScript로 전달 완료');
+        debugPrint('위치 정보를 JavaScript로 전달 완료');
       } else {
-        debugPrint('❌ 위치 정보를 가져올 수 없습니다.');
+        debugPrint('위치 정보를 가져올 수 없습니다.');
         sendLocationErrorToWebView(_controller!, '위치 정보를 가져올 수 없습니다.', requestId);
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ 위치 정보 가져오기 오류: $e');
+      debugPrint('위치 정보 가져오기 오류: $e');
       debugPrint('스택 트레이스: $stackTrace');
       if (_controller != null) {
         sendLocationErrorToWebView(_controller!, e.toString(), requestId);
@@ -286,13 +286,13 @@ class JsChannelHandler {
 
   /// 우편번호 검색 처리 (네이티브)
   void _handleSearchPostcode() {
-    debugPrint('🔍 네이티브 우편번호 검색 요청 수신');
+    debugPrint('네이티브 우편번호 검색 요청 수신');
     
     if (onSearchPostcode != null) {
-      debugPrint('✅ onSearchPostcode 콜백 호출');
+      debugPrint('onSearchPostcode 콜백 호출');
       onSearchPostcode!();
     } else {
-      debugPrint('❌ onSearchPostcode 콜백이 설정되지 않았습니다.');
+      debugPrint('onSearchPostcode 콜백이 설정되지 않았습니다.');
     }
   }
 

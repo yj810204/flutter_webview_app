@@ -35,6 +35,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   StreamSubscription? _pushTokenSubscription;
   StreamSubscription? _pushMessageSubscription;
   DaumPostcodeLocalServer? _postcodeServer;
+  bool _isPostcodeDialogOpen = false; // 다이얼로그 중복 실행 방지
 
   // 소셜 로그인 호스트 목록 (웹뷰 내에서 처리해야 함)
   // AppConfig.allowedSocialLoginDomains 사용
@@ -131,7 +132,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       debugPrint('위치 권한 요청 결과: $status');
       
       if (status.isGranted) {
-        debugPrint('✅ 위치 권한이 허용되었습니다!');
+        debugPrint('위치 권한이 허용되었습니다!');
         
         // MainActivity에 geolocation 권한 허용 알림
         const platform = MethodChannel(AppConfig.methodChannelGeolocation);
@@ -144,20 +145,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
         
         return true;
       } else if (status.isDenied) {
-        debugPrint('❌ 위치 권한이 거부되었습니다. 다음 geolocation 요청 시 다시 요청합니다.');
+        debugPrint('위치 권한이 거부되었습니다. 다음 geolocation 요청 시 다시 요청합니다.');
         return false;
       } else if (status.isPermanentlyDenied) {
-        debugPrint('❌ 위치 권한이 영구적으로 거부되었습니다. 다음 geolocation 요청 시 설정 화면으로 이동합니다.');
+        debugPrint('위치 권한이 영구적으로 거부되었습니다. 다음 geolocation 요청 시 설정 화면으로 이동합니다.');
         // 영구적으로 거부되어도 다음 요청 시 다시 시도하도록 false 반환
         return false;
       } else if (status.isLimited) {
-        debugPrint('⚠️ 위치 권한이 제한적으로 허용되었습니다.');
+        debugPrint('위치 권한이 제한적으로 허용되었습니다.');
         return true;
       }
       debugPrint('❓ 알 수 없는 권한 상태: $status');
       return false;
     } catch (e, stackTrace) {
-      debugPrint('❌ 위치 권한 요청 오류: $e');
+      debugPrint('위치 권한 요청 오류: $e');
       debugPrint('스택 트레이스: $stackTrace');
       return false;
     }
@@ -354,7 +355,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         },
       );
       
-      debugPrint('✅ JavaScript 채널 등록 완료: ${_jsHandler.channelName}');
+      debugPrint('JavaScript 채널 등록 완료: ${_jsHandler.channelName}');
       
       // Android WebView 팝업 지원 및 파일 선택기 설정 (webview_flutter_android 사용)
       if (Platform.isAndroid && controller.platform is AndroidWebViewController) {
@@ -954,30 +955,69 @@ class _WebViewScreenState extends State<WebViewScreen> {
         console.log('JavaScript alert/confirm/prompt 오버라이드 완료');
       })();
       
+      // 우편번호 검색 중복 실행 방지 플래그 (window 객체에 저장하여 전역 접근 가능)
+      if (typeof window.isPostcodeSearchInProgress === 'undefined') {
+        window.isPostcodeSearchInProgress = false;
+      }
+      if (typeof window.postcodeSearchLastTriggerTime === 'undefined') {
+        window.postcodeSearchLastTriggerTime = 0;
+      }
+      const POSTCODE_SEARCH_DEBOUNCE_MS = 500; // 500ms 디바운싱
+      
       // 우편번호 검색 트리거 함수 (공통)
       function triggerNativePostcodeSearch() {
-        console.log('[Flutter] 🔍 네이티브 우편번호 검색 트리거');
+        // 중복 실행 방지: 이미 실행 중이면 무시
+        if (window.isPostcodeSearchInProgress) {
+          console.log('[Flutter] 우편번호 검색이 이미 실행 중입니다. 중복 실행 방지');
+          return false;
+        }
         
-        // Flutter로 메시지 전송하여 네이티브 우편번호 검색 실행
-        try {
-          const message = JSON.stringify({
-            action: 'searchPostcode'
-          });
-          console.log('[Flutter] 📤 우편번호 검색 메시지 전송 시도:', message);
-          console.log('[Flutter] 📤 채널 이름:', '${AppConfig.jsChannelName}');
-          console.log('[Flutter] 📤 채널 존재 여부:', typeof ${AppConfig.jsChannelName} !== 'undefined');
+        // 디바운싱: 최근 500ms 내에 호출되었으면 무시
+        const now = Date.now();
+        if (now - window.postcodeSearchLastTriggerTime < POSTCODE_SEARCH_DEBOUNCE_MS) {
+          console.log('[Flutter] 우편번호 검색 디바운싱: 너무 빠른 연속 호출 방지');
+          return false;
+        }
+        
+        window.postcodeSearchLastTriggerTime = now;
+        window.isPostcodeSearchInProgress = true;
+        
+        console.log('[Flutter] 네이티브 우편번호 검색 트리거');
+          
+          // Flutter로 메시지 전송하여 네이티브 우편번호 검색 실행
+          try {
+            const message = JSON.stringify({
+              action: 'searchPostcode'
+            });
+          console.log('[Flutter] 우편번호 검색 메시지 전송 시도:', message);
+          console.log('[Flutter] 채널 이름:', '${AppConfig.jsChannelName}');
+          console.log('[Flutter] 채널 존재 여부:', typeof ${AppConfig.jsChannelName} !== 'undefined');
           
           if (typeof ${AppConfig.jsChannelName} === 'undefined') {
-            console.error('[Flutter] ❌ JavaScript 채널이 정의되지 않았습니다!');
+            console.error('[Flutter] JavaScript 채널이 정의되지 않았습니다!');
+            window.isPostcodeSearchInProgress = false;
             throw new Error('JavaScript 채널이 정의되지 않았습니다');
           }
           
-          ${AppConfig.jsChannelName}.postMessage(message);
-          console.log('[Flutter] ✅ 네이티브 우편번호 검색 요청 전송 완료');
+            ${AppConfig.jsChannelName}.postMessage(message);
+            console.log('[Flutter] 네이티브 우편번호 검색 요청 전송 완료');
+          
+          // 플래그 해제는 다이얼로그가 닫힐 때 Flutter에서 처리하므로
+          // 타임아웃은 안전장치로만 사용 (더 짧은 시간으로 변경)
+          setTimeout(function() {
+            if (window.isPostcodeSearchInProgress) {
+              window.isPostcodeSearchInProgress = false;
+              window.postcodeSearchLastTriggerTime = 0;
+              console.log('[Flutter] 우편번호 검색 플래그 해제 (타임아웃 안전장치)');
+            }
+          }, 3000); // 3초 후 자동 해제 (안전장치)
+          
           return true;
-        } catch (e) {
-          console.error('[Flutter] ❌ 우편번호 검색 요청 실패:', e);
-          console.error('[Flutter] ❌ 오류 스택:', e.stack);
+          } catch (e) {
+          window.isPostcodeSearchInProgress = false;
+          window.postcodeSearchLastTriggerTime = 0; // 오류 시 타임스탬프도 리셋
+            console.error('[Flutter] 우편번호 검색 요청 실패:', e);
+          console.error('[Flutter] 오류 스택:', e.stack);
           return false;
         }
       }
@@ -992,7 +1032,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         
         // initDaumPostcode() 함수 오버라이드
         window.initDaumPostcode = function() {
-          console.log('[Flutter] 🔍 initDaumPostcode 호출 감지, 네이티브 우편번호 검색 실행');
+          console.log('[Flutter] initDaumPostcode 호출 감지, 네이티브 우편번호 검색 실행');
+          
+          // 중복 실행 방지: 이미 실행 중이면 무시
+          if (window.isPostcodeSearchInProgress) {
+            console.log('[Flutter] initDaumPostcode: 이미 실행 중이므로 무시');
+            return;
+          }
           
           if (!triggerNativePostcodeSearch()) {
             // 실패 시 원래 함수 호출 (fallback)
@@ -1000,7 +1046,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               console.log('[Flutter] 🔄 fallback: 원래 initDaumPostcode 호출');
               originalInitDaumPostcode.call(this);
             } else {
-              console.error('[Flutter] ❌ 원래 initDaumPostcode 함수를 찾을 수 없습니다');
+              console.error('[Flutter] 원래 initDaumPostcode 함수를 찾을 수 없습니다');
             }
           }
         };
@@ -1022,8 +1068,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
         
         // Postcode 생성자 오버라이드
         window.daum.Postcode = function(options) {
-          console.log('[Flutter] 🔍 new daum.Postcode() 호출 감지, 네이티브 우편번호 검색 실행');
+          console.log('[Flutter] new daum.Postcode() 호출 감지, 네이티브 우편번호 검색 실행');
           console.log('[Flutter] 옵션:', options);
+          
+          // 중복 실행 방지: 이미 실행 중이면 무시
+          if (window.isPostcodeSearchInProgress) {
+            console.log('[Flutter] new daum.Postcode: 이미 실행 중이므로 가짜 객체 반환');
+            return {
+              open: function() {},
+              embed: function() {}
+            };
+          }
           
           // 네이티브 우편번호 검색 실행
           if (triggerNativePostcodeSearch()) {
@@ -1042,7 +1097,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
               console.log('[Flutter] 🔄 fallback: 원래 daum.Postcode 생성자 호출');
               return new originalPostcode(options);
             } else {
-              console.error('[Flutter] ❌ 원래 daum.Postcode 생성자를 찾을 수 없습니다');
+              console.error('[Flutter] 원래 daum.Postcode 생성자를 찾을 수 없습니다');
               return null;
             }
           }
@@ -1051,7 +1106,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
         console.log('[Flutter] daum.Postcode 생성자 오버라이드 완료');
       })();
       
-      // 우편번호 검색 관련 버튼 클릭 이벤트 가로채기 (추가 보안)
+      // 우편번호 검색 관련 버튼 클릭 이벤트 가로채기
+      // 라이믹스의 경우 .krzip-search 버튼 클릭만 감지하면 충분
+      // (버튼 클릭을 capture phase에서 가로채면 postcodifyPopUp이 호출되지 않음)
       (function() {
         console.log('[Flutter] 우편번호 검색 버튼 이벤트 리스너 추가 시작');
         
@@ -1068,19 +1125,42 @@ class _WebViewScreenState extends State<WebViewScreen> {
             '.postcode-btn',
             '.postcode-button',
             '#postcode-btn',
-            '#postcode-button'
+            '#postcode-button',
+            // 라이믹스 Krzip 플러그인
+            '.krzip-search'
           ];
+          
+          // 이미 처리된 요소를 추적 (중복 리스너 방지)
+          const processedElements = new WeakSet();
           
           selectors.forEach(function(selector) {
             try {
               const elements = document.querySelectorAll(selector);
               elements.forEach(function(element) {
+                // 이미 리스너가 추가된 요소는 건너뛰기
+                if (processedElements.has(element)) {
+                  return;
+                }
+                
+                processedElements.add(element);
+                
+                // 이벤트 리스너 추가
                 element.addEventListener('click', function(e) {
-                  console.log('[Flutter] 🔍 우편번호 검색 버튼 클릭 감지:', selector);
+                  // 이미 처리된 이벤트인지 확인 (같은 이벤트가 여러 리스너에서 처리되는 것 방지)
+                  if (e.flutterPostcodeHandled) {
+                    console.log('[Flutter] 이미 처리된 우편번호 검색 이벤트 무시');
+                    return;
+                  }
+                  
+                  console.log('[Flutter] 우편번호 검색 버튼 클릭 감지:', selector);
+                  
                   // 네이티브 검색 실행
                   if (triggerNativePostcodeSearch()) {
+                    // 이벤트가 처리되었음을 표시
+                    e.flutterPostcodeHandled = true;
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation(); // 같은 요소의 다른 리스너도 차단
                     return false;
                   }
                 }, true); // capture phase에서 실행
@@ -1387,29 +1467,36 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   /// 네이티브 우편번호 검색 실행
   void _searchPostcode() async {
-    debugPrint('🔍 네이티브 우편번호 검색 시작');
+    debugPrint('네이티브 우편번호 검색 시작');
+    
+    // 중복 실행 방지: 이미 다이얼로그가 열려있으면 무시
+    if (_isPostcodeDialogOpen) {
+      debugPrint('우편번호 검색 다이얼로그가 이미 열려있습니다. 중복 실행 방지');
+      return;
+    }
     
     if (!mounted) {
-      debugPrint('❌ 위젯이 마운트되지 않았습니다. 우편번호 검색 취소');
+      debugPrint('위젯이 마운트되지 않았습니다. 우편번호 검색 취소');
       return;
     }
     
     try {
+      _isPostcodeDialogOpen = true; // 다이얼로그 열림 플래그 설정
       // 로컬 서버 시작
       _postcodeServer ??= DaumPostcodeLocalServer();
       if (!_postcodeServer!.isRunning) {
         await _postcodeServer!.start();
-        debugPrint('✅ 우편번호 검색 로컬 서버 시작: ${_postcodeServer!.url}');
+        debugPrint('우편번호 검색 로컬 서버 시작: ${_postcodeServer!.url}');
       }
       
-      debugPrint('📱 다이얼로그 표시 시작');
+      debugPrint('다이얼로그 표시 시작');
       
       // 다음 프레임에서 다이얼로그 표시 (Context 안정화를 위해)
       DataModel? result;
       await Future.delayed(Duration(milliseconds: 100));
       
       if (!mounted) {
-        debugPrint('❌ 위젯이 마운트 해제되었습니다. 다이얼로그 표시 취소');
+        debugPrint('위젯이 마운트 해제되었습니다. 다이얼로그 표시 취소');
         return;
       }
       
@@ -1421,48 +1508,73 @@ class _WebViewScreenState extends State<WebViewScreen> {
           barrierColor: Colors.black54,
           useRootNavigator: false, // 현재 Navigator 사용
           builder: (BuildContext dialogContext) {
-            debugPrint('🔨 다이얼로그 빌더 실행');
+            debugPrint('다이얼로그 빌더 실행');
             return _DaumPostcodeDialog(
-              serverUrl: _postcodeServer!.url,
-              onResult: (data) {
-                debugPrint('📥 다이얼로그 결과 콜백: $data');
-                // DaumPostcodeChannel에서 이미 pop(data)를 호출하므로 여기서는 처리 불필요
-                // 하지만 콜백이 필요할 수 있으므로 유지
-              },
+            serverUrl: _postcodeServer!.url,
+            onResult: (data) {
+                debugPrint('다이얼로그 결과 콜백: $data');
+              // DaumPostcodeChannel에서 이미 pop(data)를 호출하므로 여기서는 처리 불필요
+              // 하지만 콜백이 필요할 수 있으므로 유지
+            },
             );
           },
         );
       } catch (e, stackTrace) {
-        debugPrint('❌ showDialog 오류: $e');
+        debugPrint('showDialog 오류: $e');
         debugPrint('스택 트레이스: $stackTrace');
         return;
       }
       
-      debugPrint('📋 다이얼로그 결과: $result');
+      debugPrint('다이얼로그 결과: $result');
       
       if (result != null) {
-        debugPrint('✅ 우편번호 검색 결과: $result');
+        debugPrint('우편번호 검색 결과: $result');
         _handleNativePostcodeResult(result);
       } else {
-        debugPrint('⚠️ 우편번호 검색이 취소되었습니다.');
+        debugPrint('우편번호 검색이 취소되었습니다.');
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ 우편번호 검색 오류: $e');
+      debugPrint('우편번호 검색 오류: $e');
       debugPrint('스택 트레이스: $stackTrace');
+    } finally {
+      // 다이얼로그가 닫혔으므로 플래그 해제
+      _isPostcodeDialogOpen = false;
+      debugPrint('우편번호 검색 다이얼로그 플래그 해제');
+      
+      // JavaScript 플래그도 즉시 해제 (다이얼로그가 닫혔으므로)
+      if (_controller != null && mounted) {
+        try {
+          _controller!.runJavaScript('''
+            (function() {
+              if (typeof window.isPostcodeSearchInProgress !== 'undefined') {
+                window.isPostcodeSearchInProgress = false;
+                window.postcodeSearchLastTriggerTime = 0; // 타임스탬프도 리셋
+                console.log('[Flutter] JavaScript 우편번호 검색 플래그 해제 (다이얼로그 닫힘)');
+              }
+            })();
+          ''');
+        } catch (e) {
+          debugPrint('JavaScript 플래그 해제 오류: $e');
+        }
+      }
     }
   }
 
   /// 네이티브 우편번호 검색 결과 처리
   void _handleNativePostcodeResult(DataModel result) {
-    debugPrint('📥 네이티브 우편번호 검색 결과 처리 시작: ${result.toString()}');
+    debugPrint('네이티브 우편번호 검색 결과 처리 시작: ${result.toString()}');
     
     if (_controller != null && mounted) {
       final zonecode = result.zonecode ?? '';
       final roadAddress = result.roadAddress ?? '';
       final jibunAddress = result.jibunAddress ?? '';
       final address = roadAddress.isNotEmpty ? roadAddress : jibunAddress;
+      // 참고항목 (건물명 등)
+      final extraAddress = result.buildingName ?? '';
+      // 상세주소는 사용자가 직접 입력하는 필드이므로 빈 문자열로 초기화
+      final detailAddress = '';
       
-      debugPrint('📋 우편번호: $zonecode, 도로명주소: $roadAddress, 지번주소: $jibunAddress');
+      debugPrint('우편번호: $zonecode, 도로명주소: $roadAddress, 지번주소: $jibunAddress, 참고항목: $extraAddress');
       
       // JavaScript로 결과를 여러 방법으로 전달
       // JSON을 사용하여 안전하게 데이터 전달
@@ -1471,6 +1583,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
         'roadAddress': roadAddress,
         'jibunAddress': jibunAddress,
         'address': address,
+        'extraAddress': extraAddress,
+        'detailAddress': detailAddress,
         'userSelectedType': result.userSelectedType ?? 'R',
         'buildingName': result.buildingName ?? '',
         'apartment': result.apartment ?? '',
@@ -1484,22 +1598,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
       final script = '''
         (function() {
           try {
-            console.log('[Flutter] 📥 네이티브 우편번호 검색 결과를 웹 페이지에 전달 시작');
+            console.log('[Flutter] 네이티브 우편번호 검색 결과를 웹 페이지에 전달 시작');
             
             // 결과 데이터 객체 생성 (JSON 파싱)
             const postcodeData = $postcodeDataJson;
             
-            console.log('[Flutter] 📋 우편번호 검색 결과 데이터:', postcodeData);
+            console.log('[Flutter] 우편번호 검색 결과 데이터:', postcodeData);
             
             // 방법 1: 전역 함수 호출 (웹 페이지가 등록한 경우)
             if (typeof window.handlePostcodeResult === 'function') {
-              console.log('[Flutter] ✅ window.handlePostcodeResult 호출');
+              console.log('[Flutter] window.handlePostcodeResult 호출');
               window.handlePostcodeResult(postcodeData);
             }
             
             // 방법 2: 전역 변수에 저장
             window.postcodeResult = postcodeData;
-            console.log('[Flutter] ✅ window.postcodeResult에 저장');
+            console.log('[Flutter] window.postcodeResult에 저장');
             
             // 방법 3: CustomEvent 발생
             try {
@@ -1510,14 +1624,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
               });
               window.dispatchEvent(postcodeEvent);
               document.dispatchEvent(postcodeEvent);
-              console.log('[Flutter] ✅ postcodeComplete 이벤트 발생');
+              console.log('[Flutter] postcodeComplete 이벤트 발생');
             } catch (e) {
-              console.warn('[Flutter] ⚠️ 이벤트 발생 오류:', e);
+              console.warn('[Flutter] 이벤트 발생 오류:', e);
             }
             
             // 방법 4: daumPostcodeCallback 호출 (가장 일반적인 패턴)
             if (typeof window.daumPostcodeCallback === 'function') {
-              console.log('[Flutter] ✅ window.daumPostcodeCallback 호출');
+              console.log('[Flutter] window.daumPostcodeCallback 호출');
               window.daumPostcodeCallback(postcodeData);
             }
             
@@ -1526,34 +1640,170 @@ class _WebViewScreenState extends State<WebViewScreen> {
               window.daumPostcodeResults = [];
             }
             window.daumPostcodeResults.push(postcodeData);
-            console.log('[Flutter] ✅ window.daumPostcodeResults에 추가');
+            console.log('[Flutter] window.daumPostcodeResults에 추가');
             
             // 방법 6: jQuery 이벤트 (jQuery가 있는 경우)
             if (typeof jQuery !== 'undefined') {
               try {
                 jQuery(window).trigger('postcodeComplete', postcodeData);
                 jQuery(document).trigger('postcodeComplete', postcodeData);
-                console.log('[Flutter] ✅ jQuery postcodeComplete 이벤트 발생');
+                console.log('[Flutter] jQuery postcodeComplete 이벤트 발생');
               } catch (e) {
-                console.warn('[Flutter] ⚠️ jQuery 이벤트 오류:', e);
+                console.warn('[Flutter] jQuery 이벤트 오류:', e);
               }
             }
             
             // 방법 7: 일반적인 필드 ID 패턴으로 직접 설정 시도
             const zonecodeValue = postcodeData.zonecode || '';
-            const addressValue = postcodeData.roadAddress || postcodeData.jibunAddress || '';
+            const roadAddressValue = postcodeData.roadAddress || '';
+            const jibunAddressValue = postcodeData.jibunAddress || '';
+            const addressValue = roadAddressValue || jibunAddressValue;
+            const extraAddressValue = postcodeData.extraAddress || postcodeData.buildingName || '';
+            const detailAddressValue = postcodeData.detailAddress || '';
+            
+            // 사용자가 선택한 주소 타입에 따라 기본 주소 설정
+            const userSelectedType = postcodeData.userSelectedType || 'R';
+            const defaultAddressValue = (userSelectedType === 'R' || userSelectedType === 'road') ? roadAddressValue : jibunAddressValue;
+            
+            // 라이믹스 Krzip 플러그인 필드 설정 (우선 처리)
+            if (typeof jQuery !== 'undefined') {
+              try {
+                // .krzip-* 클래스를 가진 필드들에 값 설정
+                const krzipFields = {
+                  postcode: jQuery('.krzip-postcode, .krzip-hidden-postcode'),
+                  roadAddress: jQuery('.krzip-roadAddress, .krzip-hidden-roadAddress'),
+                  jibunAddress: jQuery('.krzip-jibunAddress, .krzip-hidden-jibunAddress'),
+                  detailAddress: jQuery('.krzip-detailAddress, .krzip-hidden-detailAddress'),
+                  extraAddress: jQuery('.krzip-extraAddress, .krzip-hidden-extraAddress')
+                };
+                
+                // postcodify 클래스를 가진 필드들에도 값 설정
+                const postcodifyFields = {
+                  postcode: jQuery('.postcodify_postcode5'),
+                  roadAddress: jQuery('.postcodify_address'),
+                  jibunAddress: jQuery('.postcodify_jibeon_address'),
+                  detailAddress: jQuery('.postcodify_details'),
+                  extraAddress: jQuery('.postcodify_extra_info')
+                };
+                
+                // 우편번호 설정
+                if (krzipFields.postcode.length > 0) {
+                  krzipFields.postcode.val(zonecodeValue);
+                  krzipFields.postcode.trigger('change');
+                  console.log('[Flutter] 라이믹스 .krzip-postcode 필드에 우편번호 설정:', zonecodeValue);
+                }
+                if (postcodifyFields.postcode.length > 0) {
+                  postcodifyFields.postcode.val(zonecodeValue);
+                  postcodifyFields.postcode.trigger('change');
+                  console.log('[Flutter] .postcodify_postcode5 필드에 우편번호 설정:', zonecodeValue);
+                }
+                
+                // 도로명 주소 설정
+                if (krzipFields.roadAddress.length > 0) {
+                  krzipFields.roadAddress.val(defaultAddressValue);
+                  krzipFields.roadAddress.trigger('change');
+                  console.log('[Flutter] 라이믹스 .krzip-roadAddress 필드에 주소 설정:', defaultAddressValue);
+                }
+                if (postcodifyFields.roadAddress.length > 0) {
+                  postcodifyFields.roadAddress.val(defaultAddressValue);
+                  postcodifyFields.roadAddress.trigger('change');
+                  console.log('[Flutter] .postcodify_address 필드에 주소 설정:', defaultAddressValue);
+                }
+                
+                // 지번 주소 설정 (라이믹스는 괄호로 감싸는 경우가 있음)
+                if (jibunAddressValue) {
+                  if (krzipFields.jibunAddress.length > 0) {
+                    // 라이믹스 스타일: 괄호로 감싸기
+                    const jibunValue = '(' + jibunAddressValue + ')';
+                    krzipFields.jibunAddress.val(jibunValue);
+                    krzipFields.jibunAddress.trigger('change');
+                    console.log('[Flutter] 라이믹스 .krzip-jibunAddress 필드에 지번주소 설정:', jibunValue);
+                  }
+                  if (postcodifyFields.jibunAddress.length > 0) {
+                    postcodifyFields.jibunAddress.val(jibunAddressValue);
+                    postcodifyFields.jibunAddress.trigger('change');
+                    console.log('[Flutter] .postcodify_jibeon_address 필드에 지번주소 설정:', jibunAddressValue);
+                  }
+                }
+                
+                // 참고항목 설정
+                if (extraAddressValue) {
+                  if (krzipFields.extraAddress.length > 0) {
+                    krzipFields.extraAddress.val(extraAddressValue);
+                    krzipFields.extraAddress.trigger('change');
+                    console.log('[Flutter] 라이믹스 .krzip-extraAddress 필드에 참고항목 설정:', extraAddressValue);
+                  }
+                  if (postcodifyFields.extraAddress.length > 0) {
+                    postcodifyFields.extraAddress.val(extraAddressValue);
+                    postcodifyFields.extraAddress.trigger('change');
+                    console.log('[Flutter] .postcodify_extra_info 필드에 참고항목 설정:', extraAddressValue);
+                  }
+                }
+                
+                // 상세주소 설정
+                if (krzipFields.detailAddress.length > 0) {
+                  if (detailAddressValue) {
+                    krzipFields.detailAddress.val(detailAddressValue);
+                    krzipFields.detailAddress.trigger('change');
+                    console.log('[Flutter] 라이믹스 .krzip-detailAddress 필드에 상세주소 설정:', detailAddressValue);
+                  } else {
+                    // 상세주소 필드에 포커스
+                    krzipFields.detailAddress.focus();
+                    console.log('[Flutter] 라이믹스 .krzip-detailAddress 필드에 포커스');
+                  }
+                }
+                if (postcodifyFields.detailAddress.length > 0) {
+                  if (detailAddressValue) {
+                    postcodifyFields.detailAddress.val(detailAddressValue);
+                    postcodifyFields.detailAddress.trigger('change');
+                    console.log('[Flutter] .postcodify_details 필드에 상세주소 설정:', detailAddressValue);
+                  } else {
+                    postcodifyFields.detailAddress.focus();
+                    console.log('[Flutter] .postcodify_details 필드에 포커스');
+                  }
+                }
+                
+                // postcodifyPopUp의 onSelect 콜백 호출 (라이믹스 스타일)
+                if (typeof window.postcodifyOnSelect === 'function') {
+                  try {
+                    window.postcodifyOnSelect();
+                    console.log('[Flutter] postcodifyOnSelect 콜백 호출');
+                  } catch (e) {
+                    console.warn('[Flutter] postcodifyOnSelect 콜백 오류:', e);
+                  }
+                }
+              } catch (e) {
+                console.warn('[Flutter] 라이믹스 필드 설정 오류:', e);
+              }
+            }
             
             const fieldPatterns = [
-              { postal: ['postal', 'postcode', 'zipcode', 'zip', 'zonecode'], 
-                addr: ['addr', 'address', 'roadAddress', 'road_addr', 'jibunAddress', 'jibun_addr'] },
-              { postal: ['postal_code', 'post_code'], 
-                addr: ['address1', 'addr1', 'road_addr1'] },
-              { postal: ['buyer_postcode', 'receiver_postcode'], 
-                addr: ['buyer_addr', 'receiver_addr'] }
+              { 
+                postal: ['postal', 'postcode', 'zipcode', 'zip', 'zonecode'], 
+                addr: ['addr', 'address', 'roadAddress', 'road_addr', 'address1', 'addr1'],
+                jibun: ['jibunAddress', 'jibun_addr', 'jibun', 'jibunAddress1', 'jibun_addr1'],
+                extra: ['extraAddress', 'extra_addr', 'extra', 'buildingName', 'building_name', 'bname'],
+                detail: ['detailAddress', 'detail_addr', 'detail', 'address2', 'addr2']
+              },
+              { 
+                postal: ['postal_code', 'post_code'], 
+                addr: ['road_addr1', 'roadAddress1'],
+                jibun: ['jibun_addr1', 'jibunAddress1'],
+                extra: ['extra_addr1', 'extraAddress1'],
+                detail: ['detail_addr1', 'detailAddress1']
+              },
+              { 
+                postal: ['buyer_postcode', 'receiver_postcode'], 
+                addr: ['buyer_addr', 'receiver_addr', 'buyer_road_addr', 'receiver_road_addr'],
+                jibun: ['buyer_jibun', 'receiver_jibun', 'buyer_jibun_addr', 'receiver_jibun_addr'],
+                extra: ['buyer_extra', 'receiver_extra', 'buyer_building', 'receiver_building'],
+                detail: ['buyer_detail', 'receiver_detail', 'buyer_addr2', 'receiver_addr2']
+              }
             ];
             
             let fieldFound = false;
             for (const pattern of fieldPatterns) {
+              // 우편번호 필드 설정
               for (const postalId of pattern.postal) {
                 const postalField = document.getElementById(postalId) || 
                                    document.querySelector('[name="' + postalId + '"]') ||
@@ -1561,26 +1811,81 @@ class _WebViewScreenState extends State<WebViewScreen> {
                                    document.querySelector('input[placeholder*="postal"]');
                 if (postalField) {
                   postalField.value = zonecodeValue;
-                  postalField.dispatchEvent(new Event('change', { bubbles: true }));
-                  postalField.dispatchEvent(new Event('input', { bubbles: true }));
-                  console.log('[Flutter] ✅ 필드에 우편번호 설정:', postalId, '=', zonecodeValue);
+              postalField.dispatchEvent(new Event('change', { bubbles: true }));
+              postalField.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('[Flutter] 필드에 우편번호 설정:', postalId, '=', zonecodeValue);
                   fieldFound = true;
-                  break;
                 }
               }
               
+              // 도로명 주소 필드 설정
               for (const addrId of pattern.addr) {
                 const addrField = document.getElementById(addrId) || 
                                  document.querySelector('[name="' + addrId + '"]') ||
+                                 document.querySelector('input[placeholder*="도로명"]') ||
                                  document.querySelector('input[placeholder*="주소"]') ||
                                  document.querySelector('input[placeholder*="address"]');
-                if (addrField) {
-                  addrField.value = addressValue;
-                  addrField.dispatchEvent(new Event('change', { bubbles: true }));
-                  addrField.dispatchEvent(new Event('input', { bubbles: true }));
-                  console.log('[Flutter] ✅ 필드에 주소 설정:', addrId, '=', addressValue);
+            if (addrField) {
+                  addrField.value = defaultAddressValue;
+              addrField.dispatchEvent(new Event('change', { bubbles: true }));
+              addrField.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('[Flutter] 필드에 주소 설정:', addrId, '=', defaultAddressValue);
                   fieldFound = true;
-                  break;
+                }
+              }
+              
+              // 지번 주소 필드 설정
+              for (const jibunId of pattern.jibun) {
+                const jibunField = document.getElementById(jibunId) || 
+                                  document.querySelector('[name="' + jibunId + '"]') ||
+                                  document.querySelector('input[placeholder*="지번"]');
+                if (jibunField) {
+                  jibunField.value = jibunAddressValue;
+                  jibunField.dispatchEvent(new Event('change', { bubbles: true }));
+                  jibunField.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('[Flutter] 필드에 지번주소 설정:', jibunId, '=', jibunAddressValue);
+                  fieldFound = true;
+                }
+              }
+              
+              // 참고항목 필드 설정
+              for (const extraId of pattern.extra) {
+                const extraField = document.getElementById(extraId) || 
+                                  document.querySelector('[name="' + extraId + '"]') ||
+                                  document.querySelector('input[placeholder*="참고항목"]') ||
+                                  document.querySelector('input[placeholder*="건물명"]');
+                if (extraField) {
+                  extraField.value = extraAddressValue;
+                  extraField.dispatchEvent(new Event('change', { bubbles: true }));
+                  extraField.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('[Flutter] 필드에 참고항목 설정:', extraId, '=', extraAddressValue);
+                  fieldFound = true;
+                }
+              }
+              
+              // 상세주소 필드 설정 (일반적으로 사용자가 직접 입력하므로 빈 값이지만 필드가 있으면 포커스)
+              for (const detailId of pattern.detail) {
+                const detailField = document.getElementById(detailId) || 
+                                   document.querySelector('[name="' + detailId + '"]') ||
+                                   document.querySelector('input[placeholder*="상세주소"]') ||
+                                   document.querySelector('input[placeholder*="상세"]');
+                if (detailField) {
+                  // 상세주소는 사용자가 직접 입력하므로 빈 값으로 설정하거나 포커스만 주기
+                  if (detailAddressValue) {
+                    detailField.value = detailAddressValue;
+                    detailField.dispatchEvent(new Event('change', { bubbles: true }));
+                    detailField.dispatchEvent(new Event('input', { bubbles: true }));
+                    console.log('[Flutter] 필드에 상세주소 설정:', detailId, '=', detailAddressValue);
+            } else {
+                    // 상세주소 필드에 포커스 (사용자가 입력할 수 있도록)
+                    try {
+                      detailField.focus();
+                      console.log('[Flutter] 상세주소 필드에 포커스:', detailId);
+                    } catch (e) {
+                      console.warn('[Flutter] 상세주소 필드 포커스 오류:', e);
+                    }
+                  }
+                  fieldFound = true;
                 }
               }
               
@@ -1593,28 +1898,39 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 type: 'daumPostcodeComplete',
                 data: postcodeData
               }, '*');
-              console.log('[Flutter] ✅ postMessage로 전달');
-            } catch (e) {
-              console.warn('[Flutter] ⚠️ postMessage 오류:', e);
+              console.log('[Flutter] postMessage로 전달');
+          } catch (e) {
+              console.warn('[Flutter] postMessage 오류:', e);
             }
             
-            console.log('[Flutter] ✅ 우편번호 검색 결과 전달 완료');
+            console.log('[Flutter] 우편번호 검색 결과 전달 완료');
+            
+            // JavaScript 플래그 해제 (결과 전달 완료)
+            if (typeof window.isPostcodeSearchInProgress !== 'undefined') {
+              window.isPostcodeSearchInProgress = false;
+              console.log('[Flutter] JavaScript 우편번호 검색 플래그 해제');
+            }
           } catch (e) {
-            console.error('[Flutter] ❌ 우편번호 검색 결과 전달 오류:', e);
+            console.error('[Flutter] 우편번호 검색 결과 전달 오류:', e);
             console.error('[Flutter] 오류 스택:', e.stack);
+            
+            // 오류 발생 시에도 플래그 해제
+            if (typeof window.isPostcodeSearchInProgress !== 'undefined') {
+              window.isPostcodeSearchInProgress = false;
+            }
           }
         })();
       ''';
       
       try {
         _controller!.runJavaScript(script);
-        debugPrint('✅ 우편번호 검색 결과를 웹 페이지에 전달 완료');
+        debugPrint('우편번호 검색 결과를 웹 페이지에 전달 완료');
       } catch (e, stackTrace) {
-        debugPrint('❌ 우편번호 검색 결과 전달 오류: $e');
+        debugPrint('우편번호 검색 결과 전달 오류: $e');
         debugPrint('스택 트레이스: $stackTrace');
       }
     } else {
-      debugPrint('❌ WebViewController가 null이거나 위젯이 마운트되지 않았습니다.');
+      debugPrint('WebViewController가 null이거나 위젯이 마운트되지 않았습니다.');
     }
   }
 
@@ -2116,12 +2432,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
         // 서버로 자동 전송 (백그라운드, 실패해도 무시)
         _pushService!.sendDeviceTokenToServer(token).then((success) {
           if (success) {
-            debugPrint('✅ 디바이스 토큰 서버 전송 완료');
+            debugPrint('디바이스 토큰 서버 전송 완료');
           } else {
-            debugPrint('⚠️ 디바이스 토큰 서버 전송 실패 (무시)');
+            debugPrint('디바이스 토큰 서버 전송 실패 (무시)');
           }
         }).catchError((e) {
-          debugPrint('⚠️ 디바이스 토큰 서버 전송 오류 (무시): $e');
+          debugPrint('디바이스 토큰 서버 전송 오류 (무시): $e');
         });
       });
 
@@ -2211,13 +2527,13 @@ class _DaumPostcodeDialogState extends State<_DaumPostcodeDialog> {
   @override
   void initState() {
     super.initState();
-    debugPrint('🔨 _DaumPostcodeDialogState initState 호출');
+    debugPrint('_DaumPostcodeDialogState initState 호출');
     _dialogJsHandler = JsChannelHandler();
     _initializeDialogWebView();
   }
 
   Future<void> _initializeDialogWebView() async {
-    debugPrint('🔨 다이얼로그 WebView 초기화 시작');
+    debugPrint('다이얼로그 WebView 초기화 시작');
     try {
       final controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -2300,7 +2616,7 @@ class _DaumPostcodeDialogState extends State<_DaumPostcodeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('🔨 _DaumPostcodeDialog build 호출');
+    debugPrint('_DaumPostcodeDialog build 호출');
     return Dialog(
       insetPadding: EdgeInsets.zero,
       child: SafeArea(

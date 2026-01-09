@@ -39,7 +39,7 @@ class LocationService {
         timeLimit: const Duration(seconds: 10),
       );
       
-      debugPrint('✅ 위치 정보 획득 성공:');
+      debugPrint('위치 정보 획득 성공:');
       debugPrint('  - 위도: ${position.latitude}');
       debugPrint('  - 경도: ${position.longitude}');
       debugPrint('  - 정확도: ${position.accuracy}m');
@@ -50,7 +50,7 @@ class LocationService {
       
       return position;
     } catch (e, stackTrace) {
-      debugPrint('❌ 위치 정보 가져오기 실패: $e');
+      debugPrint('위치 정보 가져오기 실패: $e');
       debugPrint('스택 트레이스: $stackTrace');
       return null;
     }

@@ -74,12 +74,12 @@ class PushNotificationService {
         // 토큰을 받은 직후 서버로 전송 시도
         sendDeviceTokenToServer(_fcmToken!).then((success) {
           if (success) {
-            debugPrint('✅ 초기화 시 디바이스 토큰 서버 전송 완료');
+            debugPrint('초기화 시 디바이스 토큰 서버 전송 완료');
           } else {
-            debugPrint('⚠️ 초기화 시 디바이스 토큰 서버 전송 실패 (무시)');
+            debugPrint('초기화 시 디바이스 토큰 서버 전송 실패 (무시)');
           }
         }).catchError((e) {
-          debugPrint('⚠️ 초기화 시 디바이스 토큰 서버 전송 오류 (무시): $e');
+          debugPrint('초기화 시 디바이스 토큰 서버 전송 오류 (무시): $e');
         });
       }
 
@@ -91,12 +91,12 @@ class PushNotificationService {
         // 토큰 갱신 시에도 서버로 전송
         sendDeviceTokenToServer(newToken).then((success) {
           if (success) {
-            debugPrint('✅ 토큰 갱신 시 디바이스 토큰 서버 전송 완료');
+            debugPrint('토큰 갱신 시 디바이스 토큰 서버 전송 완료');
           } else {
-            debugPrint('⚠️ 토큰 갱신 시 디바이스 토큰 서버 전송 실패 (무시)');
+            debugPrint('토큰 갱신 시 디바이스 토큰 서버 전송 실패 (무시)');
           }
         }).catchError((e) {
-          debugPrint('⚠️ 토큰 갱신 시 디바이스 토큰 서버 전송 오류 (무시): $e');
+          debugPrint('토큰 갱신 시 디바이스 토큰 서버 전송 오류 (무시): $e');
         });
       });
 
@@ -148,14 +148,14 @@ class PushNotificationService {
       final domain = websiteUri.host;
       
       if (domain.isEmpty) {
-        debugPrint('❌ 웹사이트 도메인을 가져올 수 없습니다.');
+        debugPrint('웹사이트 도메인을 가져올 수 없습니다.');
         return false;
       }
 
       // deviceToken.php URL 생성 (도메인만 사용, 경로는 제외)
       // 형식: https://domain/modules/appmgmt/libs/deviceToken.php
       final url = 'https://$domain/${AppConfig.serverApiPathDeviceToken}';
-      debugPrint('📤 디바이스 토큰 서버 전송 시작: $url');
+      debugPrint('디바이스 토큰 서버 전송 시작: $url');
       
       // POST 요청 전송
       final response = await http.post(
@@ -167,21 +167,21 @@ class PushNotificationService {
       ).timeout(
         Duration(milliseconds: AppConfig.httpConnectTimeoutMs),
         onTimeout: () {
-          debugPrint('❌ 디바이스 토큰 서버 전송 타임아웃');
+          debugPrint('디바이스 토큰 서버 전송 타임아웃');
           throw TimeoutException('서버 전송 타임아웃');
         },
       );
       
       if (response.statusCode == 200) {
-        debugPrint('✅ 디바이스 토큰 서버 전송 성공');
+        debugPrint('디바이스 토큰 서버 전송 성공');
         return true;
       } else {
-        debugPrint('❌ 디바이스 토큰 서버 전송 실패: ${response.statusCode}');
+        debugPrint('디바이스 토큰 서버 전송 실패: ${response.statusCode}');
         debugPrint('응답 본문: ${response.body}');
         return false;
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ 디바이스 토큰 서버 전송 오류: $e');
+      debugPrint('디바이스 토큰 서버 전송 오류: $e');
       debugPrint('스택 트레이스: $stackTrace');
       return false;
     }
